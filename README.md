@@ -1,0 +1,2 @@
+# Hydra
+Scalable algotrading system
