@@ -29,7 +29,7 @@ class ServerThread (threading.Thread):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.bind((socket.gethostname(), port))
         self.sock.listen(5)
-        logger.debug('Server initialized')
+        logger.info('Server initialized')
 
     def run(self):
         while True:

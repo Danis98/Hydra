@@ -6,6 +6,8 @@ import logging
 from portfolio_api import ServerThread
 
 logging.basicConfig(filename='portfolio_manager.log', filemode='w', level=logging.DEBUG)
+logging.getLogger().setLevel(logging.INFO)
+logging.getLogger().addHandler(logging.StreamHandler())
 logger = logging.getLogger('portfolio_manager')
 
 logger.info('Starting portfolio manager...')
@@ -29,13 +31,13 @@ stop_manager = False
 try:
     logger.debug('Starting server...')
     portfolio_server = ServerThread(PORT, strategies, data_managers)
-    portfolio_server.run()
+    portfolio_server.start()
 except Exception as e:
     logger.error('Could not start server')
     print(e)
     exit(1)
 
-logger.debug('Setup complete, starting main cycle...')
+logger.info('Setup complete, starting main cycle...')
 
 # main process cycle
 while not stop_manager:
