@@ -1,9 +1,9 @@
 import json
 import time
-import _thread
+import threading
 import logging
 
-from portfolio_api import start_server
+from portfolio_api import ServerThread
 
 logging.basicConfig(filename='portfolio_manager.log', filemode='w', level=logging.DEBUG)
 logger = logging.getLogger('portfolio_manager')
@@ -27,9 +27,12 @@ data_managers = []
 stop_manager = False
 
 try:
-    _thread.start_new_thread(start_server, (PORT, strategies, data_managers))
-except:
+    logger.debug('Starting server...')
+    portfolio_server = ServerThread(PORT, strategies, data_managers)
+    portfolio_server.run()
+except Exception as e:
     logger.error('Could not start server')
+    print(e)
     exit(1)
 
 logger.debug('Setup complete, starting main cycle...')
