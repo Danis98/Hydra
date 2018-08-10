@@ -41,7 +41,6 @@ logger.info('Setup complete, starting main cycle...')
 
 # main process cycle
 while not stop_manager:
-    for strategy in strategies:
-        print(strategy['name'])
+    print(strategies)
 
     time.sleep(REFRESH_TIMEOUT)
