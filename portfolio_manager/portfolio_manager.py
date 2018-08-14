@@ -1,9 +1,11 @@
 import json
 import time
-import threading
 import logging
 
+# noinspection PyUnresolvedReferences
 from portfolio_api import ServerThread
+# noinspection PyUnresolvedReferences
+from strategy_lifecycle import init, start, pause, resume, stop
 
 logging.basicConfig(filename='portfolio_manager.log', filemode='w', level=logging.DEBUG)
 logging.getLogger().setLevel(logging.INFO)
@@ -39,8 +41,27 @@ except Exception as e:
 
 logger.info('Setup complete, starting main cycle...')
 
+TEST_MONEY_AMOUNT = 1000
+
 # main process cycle
 while not stop_manager:
-    print(strategies)
+    for strategy in strategies:
+        # do actions based on strategy status
+        if strategy['status'] == 'IDLE':
+            # initialize strategy with test amount of money
+            strategy['allocated_resources'] = TEST_MONEY_AMOUNT
+            if init(address=strategy['strategy_address'],
+                    port=strategy['strategy_port'],
+                    resources=strategy['allocated_resources']):
+                strategy['status'] = 'INITIALIZING'
+        elif strategy['status'] == 'INITIALIZING':
+            # TODO define behavior if strategy is initializing
+            pass
+        elif strategy['status'] == 'PAUSED':
+            # TODO define behavior if strategy is paused
+            pass
+        elif strategy['running'] == 'RUNNING':
+            # TODO define behavior if strategy is running
+            pass
 
     time.sleep(REFRESH_TIMEOUT)

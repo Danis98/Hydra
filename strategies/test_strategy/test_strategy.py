@@ -1,33 +1,22 @@
 import socket
 import json
 import logging
+# noinspection PyUnresolvedReferences
+from strategy_template import Strategy
 
 logging.basicConfig(filename='test_strategy.log', filemode='w', level=logging.DEBUG)
+logging.getLogger().setLevel(logging.INFO)
+logging.getLogger().addHandler(logging.StreamHandler())
 logger = logging.getLogger('test_strategy')
 
-logger.info('Starting test strategy...')
 
-config = json.loads(open('config.json', 'r').read())
+class TestStrategy (Strategy):
+    def __init__(self):
+        logger.info('Starting test strategy...')
+        Strategy.__init__(self, strategy_name='test_strategy')
 
-PORT = config['port']
-MANAGER_ADDRESS = config['manager_address']
-MANAGER_PORT = config['manager_port']
+    def on_init(self, params):
+        logger.info('Initializing!')
+        self.STATUS = 'INITIALIZING'
 
-print(MANAGER_ADDRESS)
-print(MANAGER_PORT)
-
-s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-s.connect((MANAGER_ADDRESS, MANAGER_PORT))
-
-query = {
-    'query': 'REGISTER_STRATEGY',
-    'data': {
-        'strategy_name': 'Test strategy',
-        'strategy_address': 'localhost',
-        'strategy_port': PORT,
-        'send_data_manager': True
-    }
-}
-
-s.send(json.dumps(query).encode())
-print(s.recv(1024).decode())
+test_strategy = TestStrategy()

@@ -23,7 +23,7 @@ class RequestHandler (threading.Thread):
         if request['query'] == 'REGISTER_STRATEGY':
             self.register_strategy(request['data'])
         else:
-            logger.error('Unknown request: %s', request['query'])
+            logger.error('Unknown request: %s' % request['query'])
 
     # REGISTER_STRATEGY handler
     def register_strategy(self, request_data):
@@ -32,10 +32,10 @@ class RequestHandler (threading.Thread):
         strategy_port = request_data['strategy_port']
         # if strategy is already registered, reject the request
         if strategy_name in strategy_names:
-            logger.error('Strategy %s already registered', strategy_name)
+            logger.error('Strategy %s already registered' % strategy_name)
             resp = {
                 'status': 'FAIL',
-                'message': ('Strategy %s already registered', strategy_name)
+                'message': ('Strategy %s already registered' % strategy_name)
             }
             self.socket.send(json.dumps(resp).encode())
             return
@@ -44,7 +44,9 @@ class RequestHandler (threading.Thread):
         self.strategies.append({
             'strategy_name': strategy_name,
             'strategy_address': strategy_address,
-            'strategy_port': strategy_port
+            'strategy_port': strategy_port,
+            'status': 'IDLE',
+            'allocated_resources': '-1'
         })
         resp = {
             'status': 'SUCCESS',
@@ -72,6 +74,6 @@ class ServerThread (threading.Thread):
     def run(self):
         while True:
             (client_socket, address) = self.sock.accept()
-            logger.info('Accepted connection: %r', address)
+            logger.info('Accepted connection: %r' % (address,))
             handler = RequestHandler(client_socket, self.strategies, self.data_managers)
             handler.start()
