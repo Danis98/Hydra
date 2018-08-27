@@ -1,0 +1,6 @@
+{
+  "manager_id": "TEST_RANDOM",
+  "server_port": 35001,
+  "manager_address": "localhost",
+  "manager_port": 35000
+}

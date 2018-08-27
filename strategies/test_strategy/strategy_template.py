@@ -6,10 +6,11 @@ import threading
 
 
 class StrategyServer (threading.Thread):
+
+    logger = logging.getLogger('strategy_server')
+
     def __init__(self, port, strategy):
         threading.Thread.__init__(self)
-
-        logger = logging.getLogger('strategy_server')
 
         self.PORT = port
         self.STRATEGY = strategy
@@ -18,7 +19,7 @@ class StrategyServer (threading.Thread):
         self.socket.bind(('localhost', self.PORT))
         self.socket.listen(5)
 
-        logger.info('Strategy server started successfully')
+        self.logger.info('Strategy server started successfully')
 
     def run(self):
         while True:
@@ -28,8 +29,12 @@ class StrategyServer (threading.Thread):
 
     def handle_request(self, src_socket):
         msg = json.loads(src_socket.recv(1024).decode())
-        print("Received message: %r" % json.dumps(msg))
+        self.logger.debug("Received message: %r" % json.dumps(msg))
+        # handle incoming messages
         if msg['query'] == 'INIT':
+            # connect market manager and run user-defined init
+            if 'market_manager_address' in msg['params'] and 'market_manager_port' in msg['params']:
+                self.STRATEGY.connect_market_manager(msg['params']['market_manager_address'], msg['params']['market_manager_port'])
             self.STRATEGY.on_init(msg['params'])
         elif msg['query'] == 'START':
             self.STRATEGY.on_start(msg['params'])
@@ -42,19 +47,23 @@ class StrategyServer (threading.Thread):
 
 
 class Strategy:
-    def __init__(self, strategy_name):
+    def __init__(self, strategy_name, mode):
         logger = logging.getLogger('strategy_framework')
 
         # load initial config
         self.config = json.loads(open('config.json', 'r').read())
 
         self.STRATEGY_NAME = strategy_name
+        self.MODE = mode
         self.PORT = self.config['port']
         self.MANAGER_ADDRESS = self.config['manager_address']
         self.MANAGER_PORT = self.config['manager_port']
-        self.DATA_MANAGER_ADDRESS = self.config['data_manager_address'] if 'data_manager_address' in self.config else ''
-        self.DATA_MANAGER_PORT = self.config['data_manager_port'] if 'data_manager_port' in self.config else ''
+        self.MARKET_MANAGER_CONNECTED = False
+        self.MARKET_MANAGER_ADDRESS = self.config['market_manager_address'] if 'market_manager_address' in self.config else ''
+        self.MARKET_MANAGER_PORT = self.config['market_manager_port'] if 'market_manager_port' in self.config else ''
         self.STATUS = 'IDLE'
+
+        self.market_socket = None
 
         # register strategy
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -70,7 +79,8 @@ class Strategy:
                 'strategy_name': self.STRATEGY_NAME,
                 'strategy_address': 'localhost',
                 'strategy_port': self.PORT,
-                'send_data_manager': 'data_manager_address' not in self.config or 'data_manager_port' not in self.config
+                'mode': self.MODE,
+                'send_market_manager': 'market_manager_address' not in self.config or 'market_manager_port' not in self.config
             }
         }
         try:
@@ -92,6 +102,11 @@ class Strategy:
 
         # start main strategy
         self.strategy_cycle()
+
+    # handle connection to market manager
+    def connect_market_manager(self, address, port):
+        self.market_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        #TODO connect to market manager
 
     # main strategy body, to implement in actual strategy
     def strategy_cycle(self):
