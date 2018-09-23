@@ -5,10 +5,13 @@ import logging
 import threading
 
 
+# class implementing the strategy server, handles incoming messages from the other modules
+# of the system, especially commands from the portfolio manager
 class StrategyServer (threading.Thread):
 
     logger = logging.getLogger('strategy_server')
 
+    # set up local variable, initialize socket and start listening
     def __init__(self, port, strategy):
         threading.Thread.__init__(self)
 
@@ -21,20 +24,18 @@ class StrategyServer (threading.Thread):
 
         self.logger.info('Strategy server started successfully')
 
+    # accept connections and handle them in their own thread
     def run(self):
         while True:
             (src_socket, port) = self.socket.accept()
             handler = threading.Thread(target=self.handle_request, args=(src_socket,))
             handler.start()
 
+    # route execution to the appropriate handler implemented by the strategy
     def handle_request(self, src_socket):
         msg = json.loads(src_socket.recv(1024).decode())
         self.logger.debug("Received message: %r" % json.dumps(msg))
-        # handle incoming messages
         if msg['query'] == 'INIT':
-            # connect market manager and run user-defined init
-            if 'market_manager_address' in msg['params'] and 'market_manager_port' in msg['params']:
-                self.STRATEGY.connect_market_manager(msg['params']['market_manager_address'], msg['params']['market_manager_port'])
             self.STRATEGY.on_init(msg['params'])
         elif msg['query'] == 'START':
             self.STRATEGY.on_start(msg['params'])
@@ -46,6 +47,8 @@ class StrategyServer (threading.Thread):
             self.STRATEGY.on_stop(msg['params'])
 
 
+# class implementing the basic framework of a strategy, handles interaction with the other
+# components, and provides an access to data
 class Strategy:
     def __init__(self, strategy_name, mode):
         logger = logging.getLogger('strategy_framework')
@@ -58,18 +61,14 @@ class Strategy:
         self.PORT = self.config['port']
         self.MANAGER_ADDRESS = self.config['manager_address']
         self.MANAGER_PORT = self.config['manager_port']
-        self.MARKET_MANAGER_CONNECTED = False
-        self.MARKET_MANAGER_ADDRESS = self.config['market_manager_address'] if 'market_manager_address' in self.config else ''
-        self.MARKET_MANAGER_PORT = self.config['market_manager_port'] if 'market_manager_port' in self.config else ''
+        self.MARKET_INTERFACES = {}
         self.STATUS = 'IDLE'
-
-        self.market_socket = None
 
         # register strategy
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
             s.connect((self.MANAGER_ADDRESS, self.MANAGER_PORT))
-        except ConnectionRefusedError:
+        except socket.ConnectionRefusedError:
             logger.error('Could not connect to manager')
             sys.exit()
 
@@ -80,7 +79,6 @@ class Strategy:
                 'strategy_address': 'localhost',
                 'strategy_port': self.PORT,
                 'mode': self.MODE,
-                'send_market_manager': 'market_manager_address' not in self.config or 'market_manager_port' not in self.config
             }
         }
         try:
@@ -103,10 +101,17 @@ class Strategy:
         # start main strategy
         self.strategy_cycle()
 
-    # handle connection to market manager
-    def connect_market_manager(self, address, port):
-        self.market_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        #TODO connect to market manager
+    ##################################
+    #        MARKET INTERFACE        #
+    ##################################
+
+    # request to portfolio manager to get address of desired market manager
+    def request_market_interface(self, interface_id):
+        pass
+
+    ##################################
+    #        STRATEGY METHODS        #
+    ##################################
 
     # main strategy body, to implement in actual strategy
     def strategy_cycle(self):

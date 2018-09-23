@@ -24,6 +24,8 @@ def init(address, port, resources):
     return True
 
 
+# TODO implement lifecycle commands in manager
+
 def start():
     pass
 

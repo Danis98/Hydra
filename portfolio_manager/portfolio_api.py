@@ -10,20 +10,20 @@ strategy_names = []
 
 
 class RequestHandler (threading.Thread):
-    def __init__(self, client_socket, strategies, market_managers):
+    def __init__(self, client_socket, strategies, market_interfaces):
         threading.Thread.__init__(self)
 
         self.socket = client_socket
         self.strategies = strategies
-        self.market_managers = market_managers
+        self.market_interfaces = market_interfaces
 
     def run(self):
         logger.debug('Handling request')
         request = json.loads(self.socket.recv(BUFFER_SIZE).decode())
         if request['query'] == 'REGISTER_STRATEGY':
             self.register_strategy(request['data'])
-        elif request['query'] == 'GET_MARKET_MANAGER':
-            self.get_market_manager(request['data'])
+        elif request['query'] == 'GET_MARKET_INTERFACE':
+            self.get_market_interface(request['data'])
         else:
             logger.error('Unknown request: %s' % request['query'])
 
@@ -56,43 +56,43 @@ class RequestHandler (threading.Thread):
         self.socket.send(json.dumps(resp).encode())
         self.socket.close()
 
-    # GET_MARKET_MANAGER handler
-    def get_market_manager(self, request_data):
-        manager_id = request_data['market_manager_id']
-        if manager_id not in self.market_managers:
+    # GET_MARKET_INTERFACE handler
+    def get_market_interface(self, request_data):
+        interface_id = request_data['market_interface_id']
+        if interface_id not in self.market_interfaces:
             resp = {
                 'status': 'FAIL',
-                'message': 'Market manager %s not found' % manager_id
+                'message': 'Market interface %s not found' % interface_id
             }
         else:
             resp = {
                 'status': 'SUCCESS',
                 'data': {
-                    'market_manager_address': self.market_managers[manager_id]['address'],
-                    'market_manager_port': self.market_managers[manager_id]['port']
+                    'market_interface_address': self.market_interfaces[interface_id]['address'],
+                    'market_interface_port': self.market_interfaces[interface_id]['port']
                 }
             }
         self.socket.send(json.dumps(resp).encode())
         self.socket.close()
 
-    # REGISTER_MARKET_MANAGER handler
-    def register_market_manager(self, request_data):
-        manager_id = request_data['market_manager_id']
-        manager_address = request_data['market_manager_address']
-        manager_port = request_data['market_manager_port']
+    # REGISTER_MARKET_INTERFACE handler
+    def register_market_interface(self, request_data):
+        interface_id = request_data['market_interface_id']
+        interface_address = request_data['market_interface_address']
+        interface_port = request_data['market_interface_port']
 
-        self.market_managers[manager_id] = {
-            'address': manager_address,
-            'port': manager_port
+        self.market_interfaces[interface_id] = {
+            'address': interface_address,
+            'port': interface_port
         }
 
 
 class ServerThread (threading.Thread):
-    def __init__(self, port, strategies, market_managers):
+    def __init__(self, port, strategies, market_interfaces):
         threading.Thread.__init__(self)
 
         self.strategies = strategies
-        self.market_managers = market_managers
+        self.market_interfaces = market_interfaces
 
         # initialize socket with queue length 5
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -104,5 +104,5 @@ class ServerThread (threading.Thread):
         while True:
             (client_socket, address) = self.sock.accept()
             logger.info('Accepted connection: %r' % (address,))
-            handler = RequestHandler(client_socket, self.strategies, self.market_managers)
+            handler = RequestHandler(client_socket, self.strategies, self.market_interfaces)
             handler.start()

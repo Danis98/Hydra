@@ -23,16 +23,16 @@ PORT = config['port']
 REFRESH_TIMEOUT = config['refresh_timeout']
 
 # registered strategies
-strategies = []
-# registered data managers, usually one, more for load balancing
-market_managers = []
+strategies = {}
+# registered market interfaces, usually one, more for load balancing and different data sources
+market_interfaces = {}
 
 # set to true to kill main process
 stop_manager = False
 
 try:
     logger.debug('Starting server...')
-    portfolio_server = ServerThread(PORT, strategies, market_managers)
+    portfolio_server = ServerThread(PORT, strategies, market_interfaces)
     portfolio_server.start()
 except Exception as e:
     logger.error('Could not start server')
