@@ -45,7 +45,8 @@ TEST_MONEY_AMOUNT = 1000
 
 # main process cycle
 while not stop_manager:
-    for strategy in strategies:
+    for strat_id in strategies:
+        strategy = strategies[strat_id]
         # do actions based on strategy status
         if strategy['status'] == 'IDLE':
             # initialize strategy with test amount of money
@@ -57,10 +58,7 @@ while not stop_manager:
         elif strategy['status'] == 'INITIALIZING':
             # TODO define behavior if strategy is initializing
             pass
-        elif strategy['status'] == 'PAUSED':
-            # TODO define behavior if strategy is paused
-            pass
-        elif strategy['running'] == 'RUNNING':
+        elif strategy['status'] == 'RUNNING':
             # TODO define behavior if strategy is running
             pass
 

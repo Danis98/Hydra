@@ -12,14 +12,15 @@ class StrategyServer (threading.Thread):
     logger = logging.getLogger('strategy_server')
 
     # set up local variable, initialize socket and start listening
-    def __init__(self, port, strategy):
+    def __init__(self, host, port, strategy):
         threading.Thread.__init__(self)
 
+        self.HOST = host
         self.PORT = port
         self.STRATEGY = strategy
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.socket.bind(('localhost', self.PORT))
+        self.socket.bind((self.HOST, self.PORT))
         self.socket.listen(5)
 
         self.logger.info('Strategy server started successfully')
@@ -39,8 +40,6 @@ class StrategyServer (threading.Thread):
             self.STRATEGY.on_init(msg['params'])
         elif msg['query'] == 'START':
             self.STRATEGY.on_start(msg['params'])
-        elif msg['query'] == 'PAUSE':
-            self.STRATEGY.on_pause(msg['params'])
         elif msg['query'] == 'RESUME':
             self.STRATEGY.on_resume(msg['params'])
         elif msg['query'] == 'STOP':
@@ -50,19 +49,23 @@ class StrategyServer (threading.Thread):
 # class implementing the basic framework of a strategy, handles interaction with the other
 # components, and provides an access to data
 class Strategy:
-    def __init__(self, strategy_name, mode):
+    def __init__(self, strategy_id, mode):
         logger = logging.getLogger('strategy_framework')
 
         # load initial config
         self.config = json.loads(open('config.json', 'r').read())
 
-        self.STRATEGY_NAME = strategy_name
+        self.STRATEGY_ID = strategy_id
         self.MODE = mode
+        self.STATUS = 'IDLE'
+        self.HOST = self.config['host']
         self.PORT = self.config['port']
+        self.allocated_funds = 0
+
         self.MANAGER_ADDRESS = self.config['manager_address']
         self.MANAGER_PORT = self.config['manager_port']
-        self.MARKET_INTERFACES = {}
-        self.STATUS = 'IDLE'
+
+        self.MARKET_INTERFACES = []
 
         # register strategy
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -75,8 +78,8 @@ class Strategy:
         query = {
             'query': 'REGISTER_STRATEGY',
             'data': {
-                'strategy_name': self.STRATEGY_NAME,
-                'strategy_address': 'localhost',
+                'strategy_id': self.STRATEGY_ID,
+                'strategy_address': self.HOST,
                 'strategy_port': self.PORT,
                 'mode': self.MODE,
             }
@@ -95,7 +98,7 @@ class Strategy:
             sys.exit()
 
         # start listening server
-        strategy_server = StrategyServer(self.PORT, self)
+        strategy_server = StrategyServer(self.HOST, self.PORT, self)
         strategy_server.start()
 
         # start main strategy
@@ -105,9 +108,7 @@ class Strategy:
     #        MARKET INTERFACE        #
     ##################################
 
-    # request to portfolio manager to get address of desired market manager
-    def request_market_interface(self, interface_id):
-        pass
+
 
     ##################################
     #        STRATEGY METHODS        #
@@ -123,9 +124,6 @@ class Strategy:
         pass
 
     def on_start(self, params):
-        pass
-
-    def on_pause(self, params):
         pass
 
     def on_resume(self, params):

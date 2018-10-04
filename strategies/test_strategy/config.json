@@ -1,4 +1,5 @@
 {
+  "host": "localhost",
   "port": 35002,
   "manager_address": "localhost",
   "manager_port": 35000

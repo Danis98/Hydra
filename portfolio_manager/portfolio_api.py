@@ -5,10 +5,10 @@ import json
 
 logger = logging.getLogger('portfolio_server')
 
-BUFFER_SIZE = 1024
-strategy_names = []
+BUFFER_SIZE = 2048
 
 
+# Class handling incoming requests to the portfolio manager
 class RequestHandler (threading.Thread):
     def __init__(self, client_socket, strategies, market_interfaces):
         threading.Thread.__init__(self)
@@ -22,56 +22,36 @@ class RequestHandler (threading.Thread):
         request = json.loads(self.socket.recv(BUFFER_SIZE).decode())
         if request['query'] == 'REGISTER_STRATEGY':
             self.register_strategy(request['data'])
-        elif request['query'] == 'GET_MARKET_INTERFACE':
-            self.get_market_interface(request['data'])
+        elif request['query'] == 'REGISTER_MARKET_INTERFACE':
+            self.register_market_interface(request['data'])
         else:
             logger.error('Unknown request: %s' % request['query'])
 
     # REGISTER_STRATEGY handler
     def register_strategy(self, request_data):
-        strategy_name = request_data['strategy_name']
+        strategy_id = request_data['strategy_id']
         strategy_address = request_data['strategy_address']
         strategy_port = request_data['strategy_port']
         # if strategy is already registered, reject the request
-        if strategy_name in strategy_names:
-            logger.error('Strategy %s already registered' % strategy_name)
+        if strategy_id in self.strategies:
+            logger.error('Strategy %s already registered' % strategy_id)
             resp = {
                 'status': 'FAIL',
-                'message': ('Strategy %s already registered' % strategy_name)
+                'message': ('Strategy %s already registered' % strategy_id)
             }
             self.socket.send(json.dumps(resp).encode())
             return
         # register the strategy
-        strategy_names.append(strategy_name)
-        self.strategies.append({
-            'strategy_name': strategy_name,
+        self.strategies[strategy_id] = {
+            'strategy_id': strategy_id,
             'strategy_address': strategy_address,
             'strategy_port': strategy_port,
             'status': 'IDLE',
             'allocated_resources': '0'
-        })
+        }
         resp = {
             'status': 'SUCCESS'
         }
-        self.socket.send(json.dumps(resp).encode())
-        self.socket.close()
-
-    # GET_MARKET_INTERFACE handler
-    def get_market_interface(self, request_data):
-        interface_id = request_data['market_interface_id']
-        if interface_id not in self.market_interfaces:
-            resp = {
-                'status': 'FAIL',
-                'message': 'Market interface %s not found' % interface_id
-            }
-        else:
-            resp = {
-                'status': 'SUCCESS',
-                'data': {
-                    'market_interface_address': self.market_interfaces[interface_id]['address'],
-                    'market_interface_port': self.market_interfaces[interface_id]['port']
-                }
-            }
         self.socket.send(json.dumps(resp).encode())
         self.socket.close()
 

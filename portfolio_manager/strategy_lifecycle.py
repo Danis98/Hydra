@@ -21,6 +21,7 @@ def init(address, port, resources):
     except socket.timeout:
         logger.error('Could not initialize with strategy, connection timed out')
         return False
+    logger.info("Initialization command sent")
     return True
 
 

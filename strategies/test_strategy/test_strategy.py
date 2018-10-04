@@ -15,7 +15,7 @@ class TestStrategy (Strategy):
 
     def __init__(self):
         logger.info('Starting test strategy...')
-        Strategy.__init__(self, strategy_name='test_strategy', mode='TEST_RANDOM')
+        Strategy.__init__(self, strategy_id='test_strategy', mode='TEST_RANDOM')
 
     def on_init(self, params):
         logger.info('Initializing!')
