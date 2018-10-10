@@ -45,12 +45,37 @@ class StrategyServer (threading.Thread):
         elif msg['query'] == 'STOP':
             self.STRATEGY.on_stop(msg['params'])
 
+    # subscribe to market interface data feed
+    def send_subscription(self, manager_address, manager_port, query):
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            s.connect((manager_address, manager_port))
+        except ConnectionRefusedError:
+            self.logger.error('Could not connect to manager')
+            return
+
+        try:
+            s.send(json.dumps(query).encode())
+            resp = json.loads(s.recv(1024).decode())
+
+            if resp['status'] == 'FAIL':
+                self.logger.error('Could not subscribe to data feed: %s', resp['message'])
+                return None
+            elif resp['status'] == 'SUCCESS':
+                self.logger.info('Subscribed to data feed successfully')
+                self.STRATEGY.subscriptions.append(resp['data']['subscription_handle'])
+
+        except socket.timeout:
+            self.logger.error('Connection timed out with manager during subscription')
+
 
 # class implementing the basic framework of a strategy, handles interaction with the other
 # components, and provides an access to data
 class Strategy:
     def __init__(self, strategy_id, mode):
-        logger = logging.getLogger('strategy_framework')
+        self.logger = logging.getLogger('strategy_framework')
+
+        self.RUN = True
 
         # load initial config
         self.config = json.loads(open('config.json', 'r').read())
@@ -67,12 +92,14 @@ class Strategy:
 
         self.MARKET_INTERFACES = []
 
+        self.subscriptions = []
+
         # register strategy
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
             s.connect((self.MANAGER_ADDRESS, self.MANAGER_PORT))
-        except socket.ConnectionRefusedError:
-            logger.error('Could not connect to manager')
+        except ConnectionRefusedError:
+            self.logger.error('Could not connect to manager')
             sys.exit()
 
         query = {
@@ -89,17 +116,17 @@ class Strategy:
             resp = json.loads(s.recv(1024).decode())
 
             if resp['status'] == 'FAIL':
-                logger.error('Could not register strategy: %s', resp['message'])
+                self.logger.error('Could not register strategy: %s', resp['message'])
                 sys.exit()
             elif resp['status'] == 'SUCCESS':
-                logger.info('Strategy registered')
+                self.logger.info('Strategy registered')
         except socket.timeout:
-            logger.error('Connection timed out with manager during registration')
+            self.logger.error('Connection timed out with manager during registration')
             sys.exit()
 
         # start listening server
-        strategy_server = StrategyServer(self.HOST, self.PORT, self)
-        strategy_server.start()
+        self.strategy_server = StrategyServer(self.HOST, self.PORT, self)
+        self.strategy_server.start()
 
         # start main strategy
         self.strategy_cycle()
@@ -108,7 +135,30 @@ class Strategy:
     #        MARKET INTERFACE        #
     ##################################
 
+    def subscribe(self, market_interface_id, symbol, frequency):
+        self.logger.info("Subscribing to %s:%s..." % (market_interface_id, symbol))
+        query = {
+            'query': 'SUBSCRIBE',
+            'data': {
+                'strategy_id': self.STRATEGY_ID,
+                'market_interface_id': market_interface_id,
+                'symbol': symbol,
+                'frequency': frequency
+            }
+        }
 
+        handler = threading.Thread(target=self.strategy_server.send_subscription, args=(self.MANAGER_ADDRESS, self.MANAGER_PORT, query))
+        handler.start()
+
+
+    def unsubscribe(self, subscription_handle):
+        pass
+
+    def get_bulk_data(self, market_interface_id, symbol, start_time, end_time, frequency):
+        pass
+
+    def get_current_data(self, market_interface_id, symbol):
+        pass
 
     ##################################
     #        STRATEGY METHODS        #

@@ -45,6 +45,8 @@ TEST_MONEY_AMOUNT = 1000
 
 # main process cycle
 while not stop_manager:
+    print(strategies)
+    print(market_interfaces)
     for strat_id in strategies:
         strategy = strategies[strat_id]
         # do actions based on strategy status

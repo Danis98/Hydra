@@ -8,10 +8,10 @@ logging.getLogger().addHandler(logging.StreamHandler())
 logger = logging.getLogger("test_market_interface")
 
 
-class CexioMarketInterface (MarketInterface):
+class TestMarketInterface (MarketInterface):
     def __init__(self):
-        MarketInterface.__init__(self)
-        logger.info("TEST MARKET INTERFACE")
+        MarketInterface.__init__(self, market_interface_id="TEST_INTERFACE")
+        logger.info("TEST MARKET INTERFACE INITIALIZED")
 
 
-cexio_interface = CexioMarketInterface()
+test_interface = TestMarketInterface()

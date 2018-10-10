@@ -26,6 +26,11 @@ class RequestHandler (threading.Thread):
             self.register_market_interface(request['data'])
         else:
             logger.error('Unknown request: %s' % request['query'])
+            resp = {
+                'status': 'FAIL',
+                'message': 'API query not defined'
+            }
+            self.socket.send(json.dumps(resp).encode())
 
     # REGISTER_STRATEGY handler
     def register_strategy(self, request_data):
@@ -34,13 +39,8 @@ class RequestHandler (threading.Thread):
         strategy_port = request_data['strategy_port']
         # if strategy is already registered, reject the request
         if strategy_id in self.strategies:
-            logger.error('Strategy %s already registered' % strategy_id)
-            resp = {
-                'status': 'FAIL',
-                'message': ('Strategy %s already registered' % strategy_id)
-            }
-            self.socket.send(json.dumps(resp).encode())
-            return
+            logger.error('Strategy %s already registered, updating...' % strategy_id)
+            self.strategies[strategy_id] = {}
         # register the strategy
         self.strategies[strategy_id] = {
             'strategy_id': strategy_id,
@@ -49,6 +49,8 @@ class RequestHandler (threading.Thread):
             'status': 'IDLE',
             'allocated_resources': '0'
         }
+        # send successful response
+        logger.info("Strategy %s successfully registered" % strategy_id)
         resp = {
             'status': 'SUCCESS'
         }
@@ -61,10 +63,22 @@ class RequestHandler (threading.Thread):
         interface_address = request_data['market_interface_address']
         interface_port = request_data['market_interface_port']
 
+        # if interface is already registered, reject the request
+        if interface_id in self.market_interfaces:
+            logger.error('Market interface %s already registered, updating...' % interface_id)
+            self.market_interfaces[interface_id] = {}
+
         self.market_interfaces[interface_id] = {
             'address': interface_address,
             'port': interface_port
         }
+        # send successful response
+        logger.info("Market interface %s successfully registered" % interface_id)
+        resp = {
+            'status': 'SUCCESS'
+        }
+        self.socket.send(json.dumps(resp).encode())
+        self.socket.close()
 
 
 class ServerThread (threading.Thread):

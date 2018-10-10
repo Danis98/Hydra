@@ -1,5 +1,5 @@
-import socket
 import json
+import time
 import logging
 # noinspection PyUnresolvedReferences
 from strategy_template import Strategy
@@ -15,12 +15,18 @@ class TestStrategy (Strategy):
 
     def __init__(self):
         logger.info('Starting test strategy...')
-        Strategy.__init__(self, strategy_id='test_strategy', mode='TEST_RANDOM')
+        Strategy.__init__(self, strategy_id='TEST_STRATEGY', mode='TEST_RANDOM')
 
     def on_init(self, params):
         logger.info('Initializing!')
         self.STATUS = 'INITIALIZING'
         self.funds = params['resources']
+        self.subscribe('TEST_INTERFACE', 'RANDOM', 10)
+
+    def strategy_cycle(self):
+        while self.RUN:
+            logger.info("Test strategy is %s" % self.STATUS)
+            time.sleep(5)
 
 
 test_strategy = TestStrategy()
