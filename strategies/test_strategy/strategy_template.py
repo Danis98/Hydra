@@ -18,6 +18,9 @@ class StrategyServer (threading.Thread):
         self.HOST = host
         self.PORT = port
         self.STRATEGY = strategy
+
+        self.function_call_queue = []
+
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.socket.bind((self.HOST, self.PORT))
@@ -45,33 +48,11 @@ class StrategyServer (threading.Thread):
         elif msg['query'] == 'STOP':
             self.STRATEGY.on_stop(msg['params'])
 
-    # subscribe to market interface data feed
-    def send_subscription(self, manager_address, manager_port, query):
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        try:
-            s.connect((manager_address, manager_port))
-        except ConnectionRefusedError:
-            self.logger.error('Could not connect to manager')
-            return
-
-        try:
-            s.send(json.dumps(query).encode())
-            resp = json.loads(s.recv(1024).decode())
-
-            if resp['status'] == 'FAIL':
-                self.logger.error('Could not subscribe to data feed: %s', resp['message'])
-                return None
-            elif resp['status'] == 'SUCCESS':
-                self.logger.info('Subscribed to data feed successfully')
-                self.STRATEGY.subscriptions.append(resp['data']['subscription_handle'])
-
-        except socket.timeout:
-            self.logger.error('Connection timed out with manager during subscription')
-
 
 # class implementing the basic framework of a strategy, handles interaction with the other
 # components, and provides an access to data
 class Strategy:
+    # initialize strategy and register it with the portfolio manager
     def __init__(self, strategy_id, mode):
         self.logger = logging.getLogger('strategy_framework')
 
@@ -135,6 +116,28 @@ class Strategy:
     #        MARKET INTERFACE        #
     ##################################
 
+    # handles communication with manager for subscription from separate thread
+    def send_manager_query(self, manager_address, manager_port, query, callback_success, callback_fail):
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            s.connect((manager_address, manager_port))
+        except ConnectionRefusedError:
+            self.logger.error('Could not connect to manager')
+            return
+
+        try:
+            s.send(json.dumps(query).encode())
+            resp = json.loads(s.recv(1024).decode())
+
+            if resp['status'] == 'FAIL':
+                callback_fail(resp)
+            elif resp['status'] == 'SUCCESS':
+                callback_success(resp)
+
+        except socket.timeout:
+            self.logger.error('Connection timed out with manager during subscription')
+
+    # subscribe to selected data feed
     def subscribe(self, market_interface_id, symbol, frequency):
         self.logger.info("Subscribing to %s:%s..." % (market_interface_id, symbol))
         query = {
@@ -147,12 +150,47 @@ class Strategy:
             }
         }
 
-        handler = threading.Thread(target=self.strategy_server.send_subscription, args=(self.MANAGER_ADDRESS, self.MANAGER_PORT, query))
+        def subscribe_fail(resp):
+            self.logger.error('Could not subscribe to data feed: %s', resp['message'])
+
+        def subscribe_success(resp):
+            self.logger.info('Subscribed to data feed successfully')
+            self.subscriptions.append(resp['data']['subscription_handle'])
+
+        # send subscription request to manager in another thread
+        handler = threading.Thread(target=self.send_manager_query,
+                                   args=(self.MANAGER_ADDRESS,
+                                         self.MANAGER_PORT,
+                                         query,
+                                         subscribe_success,
+                                         subscribe_fail))
         handler.start()
 
-
     def unsubscribe(self, subscription_handle):
-        pass
+        self.logger.info("Unsubscribing to %s..." % subscription_handle)
+        query = {
+            'query': 'UNSUBSCRIBE',
+            'data': {
+                'strategy_id': self.STRATEGY_ID,
+                'subscription_handle': subscription_handle
+            }
+        }
+
+        def subscribe_fail(resp):
+            self.logger.error('Could not unsubscribe to data feed: %s', resp['message'])
+
+        def subscribe_success(resp):
+            self.logger.info('Unsubscribed to data feed successfully')
+            self.subscriptions.remove(subscription_handle)
+
+        # send subscription request to manager in another thread
+        handler = threading.Thread(target=self.send_manager_query,
+                                   args=(self.MANAGER_ADDRESS,
+                                         self.MANAGER_PORT,
+                                         query,
+                                         subscribe_success,
+                                         subscribe_fail))
+        handler.start()
 
     def get_bulk_data(self, market_interface_id, symbol, start_time, end_time, frequency):
         pass
@@ -174,9 +212,6 @@ class Strategy:
         pass
 
     def on_start(self, params):
-        pass
-
-    def on_resume(self, params):
         pass
 
     def on_stop(self, params):

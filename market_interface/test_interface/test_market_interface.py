@@ -13,5 +13,20 @@ class TestMarketInterface (MarketInterface):
         MarketInterface.__init__(self, market_interface_id="TEST_INTERFACE")
         logger.info("TEST MARKET INTERFACE INITIALIZED")
 
+    def make_rest_request(self):
+        pass
+
+    def create_websocket_stream(self):
+        pass
+
+    def send_websocket_command(self, websocket, payload):
+        pass
+
+    def on_websocket_recv(self, msg):
+        pass
+
+    def interface_main_cycle(self):
+        pass
+
 
 test_interface = TestMarketInterface()

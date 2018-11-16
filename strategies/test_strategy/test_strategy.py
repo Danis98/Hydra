@@ -23,9 +23,21 @@ class TestStrategy (Strategy):
         self.funds = params['resources']
         self.subscribe('TEST_INTERFACE', 'RANDOM', 10)
 
+    def on_start(self, params):
+        pass
+
+    def on_stop(self, params):
+        pass
+
+    def on_funds_reallocation(self, params):
+        pass
+
     def strategy_cycle(self):
+        last_status = None
         while self.RUN:
-            logger.info("Test strategy is %s" % self.STATUS)
+            if last_status != self.STATUS:
+                logger.info("Test strategy is %s" % self.STATUS)
+                last_status = self.STATUS
             time.sleep(5)
 
 
