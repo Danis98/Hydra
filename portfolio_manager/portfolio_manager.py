@@ -2,10 +2,8 @@ import json
 import time
 import logging
 
-# noinspection PyUnresolvedReferences
 from portfolio_api import ServerThread
-# noinspection PyUnresolvedReferences
-from strategy_lifecycle import init, start, pause, resume, stop
+from strategy_lifecycle import init, start, stop
 
 logging.basicConfig(filename='portfolio_manager.log', filemode='w', level=logging.DEBUG)
 logging.getLogger().setLevel(logging.INFO)

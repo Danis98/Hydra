@@ -5,7 +5,6 @@ import string
 import random
 import socket
 
-# noinspection PyUnresolvedReferences
 from market_interface.data_feed import push_feed
 
 logger = logging.getLogger('interface_api')

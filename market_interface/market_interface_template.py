@@ -4,7 +4,6 @@ import socket
 import logging
 import threading
 
-# noinspection PyUnresolvedReferences
 from market_interface.market_interface_api import MarketInterfaceServer
 
 
