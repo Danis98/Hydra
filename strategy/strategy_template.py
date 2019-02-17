@@ -4,76 +4,52 @@ import socket
 import logging
 import threading
 
-
-# class implementing the strategy server, handles incoming messages from the other modules
-# of the system, especially commands from the portfolio manager
-class StrategyServer (threading.Thread):
-
-    logger = logging.getLogger('strategy_server')
-
-    # set up local variable, initialize socket and start listening
-    def __init__(self, host, port, strategy):
-        threading.Thread.__init__(self)
-
-        self.HOST = host
-        self.PORT = port
-        self.STRATEGY = strategy
-
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.socket.bind((self.HOST, self.PORT))
-        self.socket.listen(5)
-
-        self.logger.info('Strategy server started successfully')
-
-    # accept connections and handle them in their own thread
-    def run(self):
-        while True:
-            (src_socket, port) = self.socket.accept()
-            handler = threading.Thread(target=self.handle_request, args=(src_socket,))
-            handler.start()
-
-    # route execution to the appropriate handler implemented by the strategy
-    def handle_request(self, src_socket):
-        msg = json.loads(src_socket.recv(1024).decode())
-        self.logger.debug("Received message: %r" % json.dumps(msg))
-        if msg['query'] == 'INIT':
-            self.STRATEGY.on_init(msg['data'])
-        elif msg['query'] == 'START':
-            self.STRATEGY.on_start(msg['data'])
-        elif msg['query'] == 'RESUME':
-            self.STRATEGY.on_resume(msg['data'])
-        elif msg['query'] == 'STOP':
-            self.STRATEGY.on_stop(msg['data'])
+from strategy.strategy_api import StrategyServer
 
 
-# class implementing the basic framework of a strategy, handles interaction with the other
-# components, and provides an access to data
 class Strategy:
-    # initialize strategy and register it with the portfolio manager
-    def __init__(self, strategy_id, mode):
+    """
+    Basic framework for strategy, takes care of communication with the Hydra system under
+    the hood.
+    Exposes endpoints for the specific strategy implementations to override, mostly for
+    incoming command or data feed handling.
+    """
+    def __init__(self, strategy_id, mode, config_file="config.json"):
+        """
+        Initializes strategy, registering it with the portfolio manager and starting the
+        strategy-specific main cycle when it's done.
+
+        :param strategy_id: identifying ID of the strategy
+        :param mode: mode of operation, determines how the strategy is handled
+        :param config_file: filename of the configuration file
+
+        Modes of operation (NOT YET IMPLEMENTED):
+            REAL: orders get routed to real exchange, strategy handles real resources
+            TEST_LIVE: mock orders, live real data from market
+            TEST_HISTORICAL: mock orders, data is supplied as in TEST_LIVE but from historical sources
+        """
+        # TODO: implement backtest mode and real mode
         self.logger = logging.getLogger('strategy_framework')
 
+        # set false to kill strategy
         self.RUN = True
 
-        # load initial config
-        self.config = json.loads(open('config.json', 'r').read())
-
+        # load config
+        self.config = json.loads(open(config_file, 'r').read())
         self.STRATEGY_ID = strategy_id
         self.MODE = mode
         self.STATUS = 'IDLE'
         self.HOST = self.config['host']
         self.PORT = self.config['port']
-        self.allocated_funds = 0
-
         self.MANAGER_ADDRESS = self.config['manager_address']
         self.MANAGER_PORT = self.config['manager_port']
 
-        self.MARKET_INTERFACES = []
+        self.allocated_funds = 0
 
-        self.subscriptions = []
+        # active subscriptions
+        self.subscriptions = {}
 
-        # register strategy
+        # register strategy with manager
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
             s.connect((self.MANAGER_ADDRESS, self.MANAGER_PORT))
@@ -90,6 +66,7 @@ class Strategy:
                 'mode': self.MODE,
             }
         }
+        # send registration request to manager
         try:
             s.send(json.dumps(query).encode())
             resp = json.loads(s.recv(1024).decode())
@@ -114,29 +91,58 @@ class Strategy:
     #        MARKET INTERFACE        #
     ##################################
 
-    # handles communication with manager for subscription from separate thread
     def send_manager_query(self, manager_address, manager_port, query, callback_success, callback_fail):
+        """
+        Handles sending the request to the manager, then calls the appropriate callback.
+        Usually used to send requests in a non-blocking way, by executing it in a separate thread.
+
+        :param manager_address: address of the manager server
+        :param manager_port: port of the server
+        :param query: body of the request
+        :param callback_success: function to call in case of success
+        :param callback_fail: function to call in case of failure
+        """
+        # connect to manager
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
             s.connect((manager_address, manager_port))
         except ConnectionRefusedError:
             self.logger.error('Could not connect to manager')
+            resp = {
+                'status': 'FAIL',
+                'message': 'Could not connect to manager'
+            }
+            callback_fail(resp)
             return
 
+        # send request
         try:
             s.send(json.dumps(query).encode())
             resp = json.loads(s.recv(1024).decode())
 
+            # call appropriate callback
             if resp['status'] == 'FAIL':
                 callback_fail(resp)
             elif resp['status'] == 'SUCCESS':
                 callback_success(resp)
 
         except socket.timeout:
-            self.logger.error('Connection timed out with manager during subscription')
+            self.logger.error('Connection timed out with manager during request')
+            resp = {
+                'status': 'FAIL',
+                'message': 'Connection timed out with manager during request'
+            }
+            callback_fail(resp)
+            return
 
-    # subscribe to selected data feed
     def subscribe(self, market_interface_id, symbol, frequency):
+        """
+        Subscribe to data feed.
+
+        :param market_interface_id: ID of the desired market interface
+        :param symbol: requested symbol
+        :param frequency: number of seconds between feed messages
+        """
         self.logger.info("Subscribing to %s:%s..." % (market_interface_id, symbol))
         query = {
             'query': 'SUBSCRIBE',
@@ -153,12 +159,12 @@ class Strategy:
 
         def subscribe_success(resp):
             self.logger.info('Subscribed to data feed successfully')
-            self.subscriptions.append({
-                'market_interface_id': market_interface_id,
-                'subscription_handle': resp['data']['subscription_handle']
-            })
+            sub_handle = resp['data']['subscription_handle']
+            self.subscriptions[sub_handle] = {
+                'market_interface_id': market_interface_id
+            }
 
-        # send subscription request to manager in another thread
+        # send subscription request to manager in separate thread
         handler = threading.Thread(target=self.send_manager_query,
                                    args=(self.MANAGER_ADDRESS,
                                          self.MANAGER_PORT,
@@ -167,9 +173,15 @@ class Strategy:
                                          subscribe_fail))
         handler.start()
 
-    # unsubscribe from a specific data feed
-    def unsubscribe(self, market_interface_id, subscription_handle):
-        self.logger.info("Unsubscribing to %s..." % subscription_handle)
+    def unsubscribe(self, subscription_handle):
+        """
+        Unsubscribe from feed
+
+        :param subscription_handle: handle of the deleted subscription
+        """
+        self.logger.info("Unsubscribing from %s..." % subscription_handle)
+
+        market_interface_id = self.subscriptions[subscription_handle]['market_interface_id']
         query = {
             'query': 'UNSUBSCRIBE',
             'data': {
@@ -184,12 +196,9 @@ class Strategy:
 
         def unsubscribe_success(resp):
             self.logger.info('Unsubscribed to data feed successfully')
-            self.subscriptions.remove({
-                'market_interface_id': market_interface_id,
-                'subscription_handle': subscription_handle
-            })
+            del self.subscriptions[subscription_handle]
 
-        # send subscription request to manager in another thread
+        # send subscription request to manager in separate thread
         handler = threading.Thread(target=self.send_manager_query,
                                    args=(self.MANAGER_ADDRESS,
                                          self.MANAGER_PORT,
@@ -198,10 +207,10 @@ class Strategy:
                                          unsubscribe_fail))
         handler.start()
 
-    # unsubscribe to all data feeds, for convenience
     def unsubscribe_all(self):
+        """Shortcut function, unsubscribe from all data feeds"""
         for sub in self.subscriptions:
-            self.unsubscribe(sub['market_interface_id'], sub['subscription_handle'])
+            self.unsubscribe(sub['subscription_handle'])
 
     def get_bulk_data(self, market_interface_id, symbol, start_time, end_time, frequency):
         pass
@@ -213,22 +222,30 @@ class Strategy:
     #        STRATEGY METHODS        #
     ##################################
 
-    # main strategy body, to implement in actual strategy
+    """
+    The following methods are to be overridden by the specific strategy using this template.
+    """
+
     def strategy_cycle(self):
+        """Main strategy body, should contain cycle with algorithm logic"""
         pass
 
-    # lifecycle funcs, to implement by strategy
+    # lifecycle functions
 
     def on_init(self, data):
+        """Called when initialization command is received from the manager"""
         pass
 
     def on_start(self, data):
+        """Called when start command is received from the manager"""
         pass
 
     def on_stop(self, data):
+        """Called when stop command is received from the manager"""
         pass
 
-    # event handlers, to implement by strategy
+    # event handlers
 
     def on_funds_reallocation(self, data):
+        """Called when manager sends fund reallocation command, strategy should resize its positions"""
         pass

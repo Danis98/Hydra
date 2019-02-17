@@ -13,7 +13,7 @@ class TestStrategy (Strategy):
 
     def __init__(self):
         logger.info('Starting test strategy...')
-        Strategy.__init__(self, strategy_id='TEST_STRATEGY', mode='TEST_RANDOM')
+        Strategy.__init__(self, strategy_id='TEST_STRATEGY', mode='TEST_LIVE')
 
     def on_init(self, data):
         logger.info('Initializing!')
