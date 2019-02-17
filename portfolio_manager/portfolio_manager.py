@@ -12,62 +12,101 @@ logging.getLogger().setLevel(logging.INFO)
 logging.getLogger().addHandler(logging.StreamHandler())
 logger = logging.getLogger('portfolio_manager')
 
-logger.info('Starting portfolio manager...')
 
-# read config file
-config = json.loads(open("config.json", "r").read())
+class PortfolioManager:
+    """
+    Manages the whole Hydra system.
+    Keeps a list of market interfaces and strategies, and assigns resources.
+    It also send initialization and various lifecycle signals to the strategy.
+    Starts a server which handles incoming requests to the manager.
+    """
+    def __init__(self, config_file="config.json"):
+        """
+        Initialize manager and start manager server
+        :param config_file: filename of the config file containing the necessary info
+        """
+        logger.info('Starting portfolio manager...')
 
-logger.debug('Config loaded')
+        # read config file
+        self.config = json.loads(open(config_file, "r").read())
 
-PORT = config['port']
-REFRESH_TIMEOUT = config['refresh_timeout']
+        logger.debug('Config loaded')
 
-# registered strategies
-strategies = {}
-# registered market interfaces, usually one, more for load balancing and different data sources
-market_interfaces = {}
+        self.PORT = self.config['port']
+        self.REFRESH_TIMEOUT = self.config['refresh_timeout']
 
-# set to true to kill main process
-stop_manager = False
+        self.TEST_MONEY_AMOUNT = 1000
 
-try:
-    logger.debug('Starting server...')
-    portfolio_server = ServerThread(PORT, strategies, market_interfaces)
-    portfolio_server.start()
-except Exception as e:
-    logger.error('Could not start server')
-    print(e)
-    exit(1)
+        # registered strategies, indexed by ID
+        # entry contains:
+        #   strategy_id: ID of the strategy
+        #   address: address of the strategy server handling incoming messages
+        #   port: port of server
+        #   status: current status of the strategy
+        #   allocated_resources: resources allocated to the strategy to work with
+        self.strategies = {}
+        # registered market interfaces, usually one,
+        # more for load balancing and different data sources
+        # indexed by ID, entry contains:
+        #   address: address of the interface server handling incoming messages
+        #   port: port of the server
+        self.market_interfaces = {}
 
-logger.info('Setup complete, starting main cycle...')
+        # set to true to kill main process
+        self.stop_manager = False
 
-TEST_MONEY_AMOUNT = 1000
+        # start manager server
+        try:
+            logger.debug('Starting server...')
+            portfolio_server = ServerThread(self.PORT,
+                                            self.strategies,
+                                            self.market_interfaces)
+            portfolio_server.start()
+        except Exception as e:
+            logger.error('Could not start server')
+            print(e)
+            exit(1)
 
-# main process cycle
+        logger.info('Manager setup complete')
 
-last_strats = None
-last_interfs = None
-while not stop_manager:
-    if last_interfs != market_interfaces or last_strats != strategies:
-        print("Strategies: %r" % strategies)
-        print("Interfaces: %r" % market_interfaces)
-        last_strats = strategies.copy()
-        last_interfs = market_interfaces.copy()
-    for strat_id in strategies:
-        strategy = strategies[strat_id]
-        # do actions based on strategy status
-        if strategy['status'] == 'IDLE':
-            # initialize strategy with test amount of money
-            strategy['allocated_resources'] = TEST_MONEY_AMOUNT
-            if init(address=strategy['address'],
-                    port=strategy['port'],
-                    resources=strategy['allocated_resources']):
-                strategy['status'] = 'INITIALIZING'
-        elif strategy['status'] == 'INITIALIZING':
-            # TODO define behavior if strategy is initializing
-            pass
-        elif strategy['status'] == 'RUNNING':
-            # TODO define behavior if strategy is running
-            pass
+    def manager_main_cycle(self):
+        """
+        Cycle that periodically checks registered strategies and interfaces.
+        Handles sending lifecycle signals, resource reallocation commands and
+        in the future pings to check availability.
+        """
+        last_strats = None
+        last_interfs = None
+        while not self.stop_manager:
+            # debug, when strategies or interfaces structs change print them
+            if last_interfs != self.market_interfaces or last_strats != self.strategies:
+                print("Strategies: %r" % self.strategies)
+                print("Interfaces: %r" % self.market_interfaces)
+                last_strats = self.strategies.copy()
+                last_interfs = self.market_interfaces.copy()
 
-    time.sleep(REFRESH_TIMEOUT)
+            # iterate over strategies, check up on them
+            for strat_id in self.strategies:
+                strategy = self.strategies[strat_id]
+                # try to initialize idle strategies
+                if strategy['status'] == 'IDLE':
+                    # initialize strategy with test amount of money
+                    strategy['allocated_resources'] = self.TEST_MONEY_AMOUNT
+                    if init(address=strategy['address'],
+                            port=strategy['port'],
+                            resources=strategy['allocated_resources']):
+                        strategy['status'] = 'INITIALIZING'
+                elif strategy['status'] == 'INITIALIZING':
+                    # TODO define behavior if strategy is initializing
+                    pass
+                elif strategy['status'] == 'RUNNING':
+                    # TODO define behavior if strategy is running
+                    pass
+
+            time.sleep(self.REFRESH_TIMEOUT)
+
+
+# start manager
+manager = PortfolioManager()
+logger.info("Starting manager main cycle...")
+manager.manager_main_cycle()
