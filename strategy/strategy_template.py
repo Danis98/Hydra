@@ -19,8 +19,6 @@ class StrategyServer (threading.Thread):
         self.PORT = port
         self.STRATEGY = strategy
 
-        self.function_call_queue = []
-
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.socket.bind((self.HOST, self.PORT))
@@ -40,13 +38,13 @@ class StrategyServer (threading.Thread):
         msg = json.loads(src_socket.recv(1024).decode())
         self.logger.debug("Received message: %r" % json.dumps(msg))
         if msg['query'] == 'INIT':
-            self.STRATEGY.on_init(msg['params'])
+            self.STRATEGY.on_init(msg['data'])
         elif msg['query'] == 'START':
-            self.STRATEGY.on_start(msg['params'])
+            self.STRATEGY.on_start(msg['data'])
         elif msg['query'] == 'RESUME':
-            self.STRATEGY.on_resume(msg['params'])
+            self.STRATEGY.on_resume(msg['data'])
         elif msg['query'] == 'STOP':
-            self.STRATEGY.on_stop(msg['params'])
+            self.STRATEGY.on_stop(msg['data'])
 
 
 # class implementing the basic framework of a strategy, handles interaction with the other
@@ -155,7 +153,10 @@ class Strategy:
 
         def subscribe_success(resp):
             self.logger.info('Subscribed to data feed successfully')
-            self.subscriptions.append(resp['data']['subscription_handle'])
+            self.subscriptions.append({
+                'market_interface_id': market_interface_id,
+                'subscription_handle': resp['data']['subscription_handle']
+            })
 
         # send subscription request to manager in another thread
         handler = threading.Thread(target=self.send_manager_query,
@@ -166,31 +167,41 @@ class Strategy:
                                          subscribe_fail))
         handler.start()
 
-    def unsubscribe(self, subscription_handle):
+    # unsubscribe from a specific data feed
+    def unsubscribe(self, market_interface_id, subscription_handle):
         self.logger.info("Unsubscribing to %s..." % subscription_handle)
         query = {
             'query': 'UNSUBSCRIBE',
             'data': {
                 'strategy_id': self.STRATEGY_ID,
+                'market_interface': market_interface_id,
                 'subscription_handle': subscription_handle
             }
         }
 
-        def subscribe_fail(resp):
+        def unsubscribe_fail(resp):
             self.logger.error('Could not unsubscribe to data feed: %s', resp['message'])
 
-        def subscribe_success(resp):
+        def unsubscribe_success(resp):
             self.logger.info('Unsubscribed to data feed successfully')
-            self.subscriptions.remove(subscription_handle)
+            self.subscriptions.remove({
+                'market_interface_id': market_interface_id,
+                'subscription_handle': subscription_handle
+            })
 
         # send subscription request to manager in another thread
         handler = threading.Thread(target=self.send_manager_query,
                                    args=(self.MANAGER_ADDRESS,
                                          self.MANAGER_PORT,
                                          query,
-                                         subscribe_success,
-                                         subscribe_fail))
+                                         unsubscribe_success,
+                                         unsubscribe_fail))
         handler.start()
+
+    # unsubscribe to all data feeds, for convenience
+    def unsubscribe_all(self):
+        for sub in self.subscriptions:
+            self.unsubscribe(sub['market_interface_id'], sub['subscription_handle'])
 
     def get_bulk_data(self, market_interface_id, symbol, start_time, end_time, frequency):
         pass
@@ -208,16 +219,16 @@ class Strategy:
 
     # lifecycle funcs, to implement by strategy
 
-    def on_init(self, params):
+    def on_init(self, data):
         pass
 
-    def on_start(self, params):
+    def on_start(self, data):
         pass
 
-    def on_stop(self, params):
+    def on_stop(self, data):
         pass
 
     # event handlers, to implement by strategy
 
-    def on_funds_reallocation(self, params):
+    def on_funds_reallocation(self, data):
         pass

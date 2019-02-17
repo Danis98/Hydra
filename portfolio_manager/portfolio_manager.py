@@ -44,17 +44,23 @@ logger.info('Setup complete, starting main cycle...')
 TEST_MONEY_AMOUNT = 1000
 
 # main process cycle
+
+last_strats = None
+last_interfs = None
 while not stop_manager:
-    print(strategies)
-    print(market_interfaces)
+    if last_interfs != market_interfaces or last_strats != strategies:
+        print("Strategies: %r" % strategies)
+        print("Interfaces: %r" % market_interfaces)
+        last_strats = strategies.copy()
+        last_interfs = market_interfaces.copy()
     for strat_id in strategies:
         strategy = strategies[strat_id]
         # do actions based on strategy status
         if strategy['status'] == 'IDLE':
             # initialize strategy with test amount of money
             strategy['allocated_resources'] = TEST_MONEY_AMOUNT
-            if init(address=strategy['strategy_address'],
-                    port=strategy['strategy_port'],
+            if init(address=strategy['address'],
+                    port=strategy['port'],
                     resources=strategy['allocated_resources']):
                 strategy['status'] = 'INITIALIZING'
         elif strategy['status'] == 'INITIALIZING':

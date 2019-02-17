@@ -26,7 +26,13 @@ class TestMarketInterface (MarketInterface):
         pass
 
     def interface_main_cycle(self):
-        pass
+        last_subs = None
+        while True:
+            if last_subs != self.subscriptions:
+                print("Subscriptions:")
+                for sub in self.subscriptions:
+                    print("%r" % sub)
+                last_subs = self.subscriptions.copy()
 
 
 test_interface = TestMarketInterface()

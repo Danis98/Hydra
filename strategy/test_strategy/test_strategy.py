@@ -1,8 +1,6 @@
-import json
 import time
 import logging
-# noinspection PyUnresolvedReferences
-from strategy_template import Strategy
+from strategy.strategy_template import Strategy
 
 logging.basicConfig(filename='test_strategy.log', filemode='w', level=logging.DEBUG)
 logging.getLogger().setLevel(logging.INFO)
@@ -17,19 +15,19 @@ class TestStrategy (Strategy):
         logger.info('Starting test strategy...')
         Strategy.__init__(self, strategy_id='TEST_STRATEGY', mode='TEST_RANDOM')
 
-    def on_init(self, params):
+    def on_init(self, data):
         logger.info('Initializing!')
         self.STATUS = 'INITIALIZING'
-        self.funds = params['resources']
-        self.subscribe('TEST_INTERFACE', 'RANDOM', 10)
+        self.funds = data['resources']
+        self.subscribe('TEST_INTERFACE', 'RANDOM', 3)
 
-    def on_start(self, params):
+    def on_start(self, data):
         pass
 
-    def on_stop(self, params):
+    def on_stop(self, data):
         pass
 
-    def on_funds_reallocation(self, params):
+    def on_funds_reallocation(self, data):
         pass
 
     def strategy_cycle(self):

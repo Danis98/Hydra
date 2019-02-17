@@ -13,7 +13,7 @@ def init(address, port, resources):
         sock.connect((address, port))
         request = {
             'query': 'INIT',
-            'params': {
+            'data': {
                 'resources': resources
             }
         }
