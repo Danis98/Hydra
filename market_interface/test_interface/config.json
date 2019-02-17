@@ -2,5 +2,6 @@
   "host": "localhost",
   "port": 35001,
   "manager_address": "localhost",
-  "manager_port": 35000
+  "manager_port": 35000,
+  "buffer_size": 2048
 }
