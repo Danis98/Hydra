@@ -3,10 +3,8 @@ import threading
 import socket
 import json
 
-logger = logging.getLogger('strategy_server')
 
-
-class StrategyServer (threading.Thread):
+class StrategyApiServer (threading.Thread):
     """
     Main server thread for the strategy.
     Runs in parallel with the main strategy thread and handles
@@ -22,6 +20,8 @@ class StrategyServer (threading.Thread):
         """
         threading.Thread.__init__(self)
 
+        self.logger = logging.getLogger('strategy_server')
+
         self.HOST = host
         self.PORT = port
         self.STRATEGY = strategy
@@ -32,7 +32,7 @@ class StrategyServer (threading.Thread):
         self.socket.bind((self.HOST, self.PORT))
         self.socket.listen(5)
 
-        logger.info('Strategy server started successfully')
+        self.logger.info('Strategy server started successfully')
 
     def run(self):
         """Accept connections and handle them in a separate child thread"""
@@ -49,7 +49,7 @@ class StrategyServer (threading.Thread):
         """
         # read request
         msg = json.loads(src_socket.recv(1024).decode())
-        logger.debug("Received message: %r" % json.dumps(msg))
+        self.logger.debug("Received message: %r" % json.dumps(msg))
 
         # call appropriate handler function
         if msg['query'] == 'INIT':
@@ -61,5 +61,5 @@ class StrategyServer (threading.Thread):
         elif msg['query'] == 'STOP':
             self.STRATEGY.on_stop(msg['data'])
         else:
-            logger.error('Unknown request: %s' % msg['query'])
+            self.logger.error('Unknown request: %s' % msg['query'])
         src_socket.close()

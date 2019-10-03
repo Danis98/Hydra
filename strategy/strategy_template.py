@@ -4,7 +4,7 @@ import socket
 import logging
 import threading
 
-from strategy.strategy_api import StrategyServer
+from strategy.strategy_api import StrategyApiServer
 
 
 class Strategy:
@@ -81,7 +81,7 @@ class Strategy:
             sys.exit()
 
         # start listening server
-        self.strategy_server = StrategyServer(self.HOST, self.PORT, self)
+        self.strategy_server = StrategyApiServer(self.HOST, self.PORT, self)
         self.strategy_server.start()
 
         # start main strategy
@@ -248,4 +248,8 @@ class Strategy:
 
     def on_funds_reallocation(self, data):
         """Called when manager sends fund reallocation command, strategy should resize its positions"""
+        pass
+
+    def on_data_feed_recv(self, data):
+        """Called when the strategy receives a data feed message from one of its subscriptions"""
         pass
