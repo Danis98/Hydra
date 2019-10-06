@@ -1,0 +1,36 @@
+title Strategy Lifecycle
+
+loop until RETRY_LIMIT
+Strategy->Manager: REGISTER_STRATEGY {strategy_id, strategy_address, strategy_port}
+alt correctly registered
+Manager-->Strategy: SUCCESS
+else not registered
+Manager-->Strategy: FAIL
+end
+end
+
+Manager->Strategy: INIT {resources}
+note over Strategy: Does subscriptions, downloads data,\ndoes preliminary calculations etc.
+Strategy->Manager: READY
+
+par main thread
+loop
+Manager->Strategy: START
+
+Manager->Strategy: STOP
+opt
+Manager->Strategy: REALLOCATE {new_resources}
+note over Strategy: Liquidates positions if needed
+Strategy-->Manager: REALLOC_DONE
+end
+end
+thread status change event
+Strategy->Manager: STATUS_CHANGE {status, message}
+thread ping thread
+loop every PING_TIMEOUT
+Manager->Strategy: PING
+Strategy-->Manager: PONG {status}
+end
+thread data thread
+note over Strategy, Manager: <<TO BE DEFINED>>
+end

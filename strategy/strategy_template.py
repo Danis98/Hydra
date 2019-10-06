@@ -5,6 +5,9 @@ import logging
 import threading
 
 from strategy.strategy_api import StrategyApiServer
+from common.send_manager_query import send_manager_query
+
+lock = threading.Lock()
 
 
 class Strategy:
@@ -50,13 +53,19 @@ class Strategy:
         self.subscriptions = {}
 
         # register strategy with manager
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        try:
-            s.connect((self.MANAGER_ADDRESS, self.MANAGER_PORT))
-        except ConnectionRefusedError:
-            self.logger.error('Could not connect to manager')
-            sys.exit()
+        self.register()
 
+        # start listening server
+        self.strategy_server = StrategyApiServer(self.HOST, self.PORT, self)
+        self.strategy_server.start()
+
+        # start main strategy
+        self.strategy_cycle()
+
+    def register(self):
+        """
+        Register strategy with manager
+        """
         query = {
             'query': 'REGISTER_STRATEGY',
             'data': {
@@ -66,74 +75,24 @@ class Strategy:
                 'mode': self.MODE,
             }
         }
-        # send registration request to manager
-        try:
-            s.send(json.dumps(query).encode())
-            resp = json.loads(s.recv(1024).decode())
 
-            if resp['status'] == 'FAIL':
-                self.logger.error('Could not register strategy: %s', resp['message'])
-                sys.exit()
-            elif resp['status'] == 'SUCCESS':
-                self.logger.info('Strategy registered')
-        except socket.timeout:
-            self.logger.error('Connection timed out with manager during registration')
-            sys.exit()
+        def register_fail(resp):
+            self.logger.error('Could not register strategy: %s', resp['message'])
+            sys.exit(1)
 
-        # start listening server
-        self.strategy_server = StrategyApiServer(self.HOST, self.PORT, self)
-        self.strategy_server.start()
+        def register_success(resp):
+            self.logger.info('Strategy registered')
 
-        # start main strategy
-        self.strategy_cycle()
+        # send registration request to manager in this thread, since it is vital for everything
+        send_manager_query(self.MANAGER_ADDRESS,
+                           self.MANAGER_PORT,
+                           query,
+                           register_success,
+                           register_fail)
 
     ##################################
     #        MARKET INTERFACE        #
     ##################################
-
-    def send_manager_query(self, manager_address, manager_port, query, callback_success, callback_fail):
-        """
-        Handles sending the request to the manager, then calls the appropriate callback.
-        Usually used to send requests in a non-blocking way, by executing it in a separate thread.
-
-        :param manager_address: address of the manager server
-        :param manager_port: port of the server
-        :param query: body of the request
-        :param callback_success: function to call in case of success
-        :param callback_fail: function to call in case of failure
-        """
-        # connect to manager
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        try:
-            s.connect((manager_address, manager_port))
-        except ConnectionRefusedError:
-            self.logger.error('Could not connect to manager')
-            resp = {
-                'status': 'FAIL',
-                'message': 'Could not connect to manager'
-            }
-            callback_fail(resp)
-            return
-
-        # send request
-        try:
-            s.send(json.dumps(query).encode())
-            resp = json.loads(s.recv(1024).decode())
-
-            # call appropriate callback
-            if resp['status'] == 'FAIL':
-                callback_fail(resp)
-            elif resp['status'] == 'SUCCESS':
-                callback_success(resp)
-
-        except socket.timeout:
-            self.logger.error('Connection timed out with manager during request')
-            resp = {
-                'status': 'FAIL',
-                'message': 'Connection timed out with manager during request'
-            }
-            callback_fail(resp)
-            return
 
     def subscribe(self, market_interface_id, symbol, frequency):
         """
@@ -165,7 +124,7 @@ class Strategy:
             }
 
         # send subscription request to manager in separate thread
-        handler = threading.Thread(target=self.send_manager_query,
+        handler = threading.Thread(target=send_manager_query,
                                    args=(self.MANAGER_ADDRESS,
                                          self.MANAGER_PORT,
                                          query,
@@ -199,7 +158,7 @@ class Strategy:
             del self.subscriptions[subscription_handle]
 
         # send subscription request to manager in separate thread
-        handler = threading.Thread(target=self.send_manager_query,
+        handler = threading.Thread(target=send_manager_query,
                                    args=(self.MANAGER_ADDRESS,
                                          self.MANAGER_PORT,
                                          query,
@@ -209,7 +168,8 @@ class Strategy:
 
     def unsubscribe_all(self):
         """Shortcut function, unsubscribe from all data feeds"""
-        for sub in self.subscriptions:
+        all_subs = self.subscriptions.keys()
+        for sub in all_subs:
             self.unsubscribe(sub['subscription_handle'])
 
     def get_bulk_data(self, market_interface_id, symbol, start_time, end_time, frequency):

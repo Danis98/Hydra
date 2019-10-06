@@ -51,6 +51,10 @@ class StrategyApiServer (threading.Thread):
         msg = json.loads(src_socket.recv(1024).decode())
         self.logger.debug("Received message: %r" % json.dumps(msg))
 
+        # lock thread to avoid race conditions
+        lock = threading.Lock()
+        lock.acquire()
+
         # call appropriate handler function
         if msg['query'] == 'INIT':
             self.STRATEGY.on_init(msg['data'])
@@ -60,6 +64,12 @@ class StrategyApiServer (threading.Thread):
             self.STRATEGY.on_resume(msg['data'])
         elif msg['query'] == 'STOP':
             self.STRATEGY.on_stop(msg['data'])
+        elif msg['query'] == 'REALLOCATE':
+            self.STRATEGY.on_funds_reallocation(msg['data'])
+            # TODO reallocation done message
         else:
             self.logger.error('Unknown request: %s' % msg['query'])
+
+        # query executed, release lock and close connection
+        lock.release()
         src_socket.close()

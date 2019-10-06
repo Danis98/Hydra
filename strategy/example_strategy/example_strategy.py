@@ -2,13 +2,13 @@ import time
 import logging
 from strategy.strategy_template import Strategy
 
-logging.basicConfig(filename='test_strategy.log', filemode='w', level=logging.DEBUG)
+logging.basicConfig(filename='example_strategy.log', filemode='w', level=logging.DEBUG)
 logging.getLogger().setLevel(logging.INFO)
 logging.getLogger().addHandler(logging.StreamHandler())
-logger = logging.getLogger('test_strategy')
+logger = logging.getLogger('example_strategy')
 
 
-class TestStrategy (Strategy):
+class ExampleStrategy (Strategy):
     funds = 0
 
     def __init__(self):
@@ -16,19 +16,20 @@ class TestStrategy (Strategy):
         Strategy.__init__(self, strategy_id='TEST_STRATEGY', mode='TEST_LIVE')
 
     def on_init(self, data):
+        super().on_init(data)
         logger.info('Initializing!')
         self.STATUS = 'INITIALIZING'
         self.funds = data['resources']
         self.subscribe('TEST_INTERFACE', 'RANDOM', 3)
 
     def on_start(self, data):
-        pass
+        super().on_start(data)
 
     def on_stop(self, data):
-        pass
+        super().on_stop(data)
 
     def on_funds_reallocation(self, data):
-        pass
+        super().on_funds_reallocation(data)
 
     def strategy_cycle(self):
         last_status = None
@@ -39,4 +40,4 @@ class TestStrategy (Strategy):
             time.sleep(5)
 
 
-test_strategy = TestStrategy()
+test_strategy = ExampleStrategy()
