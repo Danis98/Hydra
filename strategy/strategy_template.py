@@ -17,7 +17,7 @@ class Strategy:
     Exposes endpoints for the specific strategy implementations to override, mostly for
     incoming command or data feed handling.
     """
-    def __init__(self, strategy_id, mode, config_file="config.json"):
+    def __init__(self, strategy_id, mode, config):
         """
         Initializes strategy, registering it with the portfolio manager and starting the
         strategy-specific main cycle when it's done.
@@ -38,7 +38,7 @@ class Strategy:
         self.RUN = True
 
         # load config
-        self.config = json.loads(open(config_file, 'r').read())
+        self.config = config
         self.STRATEGY_ID = strategy_id
         self.MODE = mode
         self.STATUS = 'IDLE'
@@ -52,6 +52,13 @@ class Strategy:
         # active subscriptions
         self.subscriptions = {}
 
+        # server listening to incoming queries
+        self.strategy_server = None
+
+    def boot(self):
+        """
+        Start all the processes and do all the things needed to start rollin'
+        """
         # register strategy with manager
         self.register()
 
@@ -59,8 +66,15 @@ class Strategy:
         self.strategy_server = StrategyApiServer(self.HOST, self.PORT, self)
         self.strategy_server.start()
 
-        # start main strategy
+        # start main strategy body
         self.strategy_cycle()
+
+    def register_callback(self, resp):
+        if resp['status'] == 'SUCCESS':
+            self.logger.info('Strategy registered')
+        else:
+            self.logger.error('Could not register strategy: %s', resp['message'])
+            sys.exit(1)
 
     def register(self):
         """
@@ -76,23 +90,25 @@ class Strategy:
             }
         }
 
-        def register_fail(resp):
-            self.logger.error('Could not register strategy: %s', resp['message'])
-            sys.exit(1)
-
-        def register_success(resp):
-            self.logger.info('Strategy registered')
-
         # send registration request to manager in this thread, since it is vital for everything
         send_manager_query(self.MANAGER_ADDRESS,
                            self.MANAGER_PORT,
                            query,
-                           register_success,
-                           register_fail)
+                           self.register_callback)
 
     ##################################
     #        MARKET INTERFACE        #
     ##################################
+
+    def subscribe_callback(self, resp, market_interface_id):
+        if resp['status'] == 'SUCCESS':
+            self.logger.info('Subscribed to data feed successfully')
+            sub_handle = resp['data']['subscription_handle']
+            self.subscriptions[sub_handle] = {
+                'market_interface_id': market_interface_id
+            }
+        else:
+            self.logger.error('Could not subscribe to data feed: %s' % resp['message'])
 
     def subscribe(self, market_interface_id, symbol, frequency):
         """
@@ -113,24 +129,20 @@ class Strategy:
             }
         }
 
-        def subscribe_fail(resp):
-            self.logger.error('Could not subscribe to data feed: %s', resp['message'])
-
-        def subscribe_success(resp):
-            self.logger.info('Subscribed to data feed successfully')
-            sub_handle = resp['data']['subscription_handle']
-            self.subscriptions[sub_handle] = {
-                'market_interface_id': market_interface_id
-            }
-
         # send subscription request to manager in separate thread
         handler = threading.Thread(target=send_manager_query,
                                    args=(self.MANAGER_ADDRESS,
                                          self.MANAGER_PORT,
                                          query,
-                                         subscribe_success,
-                                         subscribe_fail))
+                                         lambda resp: self.subscribe_callback(resp, market_interface_id)))
         handler.start()
+
+    def unsubscribe_callback(self, resp, subscription_handle):
+        if resp['status'] == 'SUCCESS':
+            self.logger.info('Unsubscribed to data feed successfully')
+            del self.subscriptions[subscription_handle]
+        else:
+            self.logger.error('Could not unsubscribe to data feed: %s' % resp['message'])
 
     def unsubscribe(self, subscription_handle):
         """
@@ -150,27 +162,19 @@ class Strategy:
             }
         }
 
-        def unsubscribe_fail(resp):
-            self.logger.error('Could not unsubscribe to data feed: %s', resp['message'])
-
-        def unsubscribe_success(resp):
-            self.logger.info('Unsubscribed to data feed successfully')
-            del self.subscriptions[subscription_handle]
-
         # send subscription request to manager in separate thread
         handler = threading.Thread(target=send_manager_query,
                                    args=(self.MANAGER_ADDRESS,
                                          self.MANAGER_PORT,
                                          query,
-                                         unsubscribe_success,
-                                         unsubscribe_fail))
+                                         lambda resp: self.subscribe_callback(resp, subscription_handle)))
         handler.start()
 
     def unsubscribe_all(self):
         """Shortcut function, unsubscribe from all data feeds"""
-        all_subs = self.subscriptions.keys()
+        all_subs = list(self.subscriptions.keys())
         for sub in all_subs:
-            self.unsubscribe(sub['subscription_handle'])
+            self.unsubscribe(sub)
 
     def get_bulk_data(self, market_interface_id, symbol, start_time, end_time, frequency):
         pass

@@ -3,7 +3,7 @@ import logging
 import json
 
 
-def send_manager_query(manager_address, manager_port, query, callback_success, callback_fail):
+def send_manager_query(manager_address, manager_port, query, callback):
     """
     Utility function used to perform several functions.
     Handles sending the request to the manager, then calls the appropriate callback.
@@ -12,8 +12,7 @@ def send_manager_query(manager_address, manager_port, query, callback_success, c
     :param manager_address: address of the manager server
     :param manager_port: port of the server
     :param query: body of the request
-    :param callback_success: function to call in case of success
-    :param callback_fail: function to call in case of failure
+    :param callback_success: function to call
     """
     logger = logging.getLogger('send_manager_query')
 
@@ -27,7 +26,7 @@ def send_manager_query(manager_address, manager_port, query, callback_success, c
             'status': 'FAIL',
             'message': 'Could not connect to manager'
         }
-        callback_fail(resp)
+        callback(resp)
         return
 
     # send request
@@ -37,9 +36,9 @@ def send_manager_query(manager_address, manager_port, query, callback_success, c
 
         # call appropriate callback
         if resp['status'] == 'FAIL':
-            callback_fail(resp)
+            callback(resp)
         elif resp['status'] == 'SUCCESS':
-            callback_success(resp)
+            callback(resp)
 
     except socket.timeout:
         logger.error('Connection timed out with manager during request')
@@ -47,5 +46,5 @@ def send_manager_query(manager_address, manager_port, query, callback_success, c
             'status': 'FAIL',
             'message': 'Connection timed out with manager during request'
         }
-        callback_fail(resp)
+        callback(resp)
         return

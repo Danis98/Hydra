@@ -1,4 +1,5 @@
 import time
+import json
 import logging
 from strategy.strategy_template import Strategy
 
@@ -13,7 +14,9 @@ class ExampleStrategy (Strategy):
 
     def __init__(self):
         logger.info('Starting test strategy...')
-        Strategy.__init__(self, strategy_id='TEST_STRATEGY', mode='TEST_LIVE')
+        config = json.loads(open('config.json').read())
+        Strategy.__init__(self, strategy_id='TEST_STRATEGY', mode='TEST_LIVE', config=config)
+        self.boot()
 
     def on_init(self, data):
         super().on_init(data)
