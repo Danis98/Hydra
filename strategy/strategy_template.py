@@ -1,9 +1,10 @@
 import sys
+import json
 import logging
 import threading
 
+from common.messaging import message_to_address
 from strategy.strategy_api import StrategyApiServer
-from common.send_manager_query import send_manager_query
 
 lock = threading.Lock()
 
@@ -15,7 +16,7 @@ class Strategy:
     Exposes endpoints for the specific strategy implementations to override, mostly for
     incoming command or data feed handling.
     """
-    def __init__(self, strategy_id, mode, config):
+    def __init__(self, strategy_id, mode, config_file):
         """
         Initializes strategy, registering it with the portfolio manager and starting the
         strategy-specific main cycle when it's done.
@@ -36,7 +37,11 @@ class Strategy:
         self.RUN = True
 
         # load config
-        self.config = config
+        try:
+            self.config = json.loads(open('config.json').read())
+        except FileNotFoundError:
+            self.logger.error('Could not find config file %s, aborting...' % config_file)
+            sys.exit(1)
         self.STRATEGY_ID = strategy_id
         self.MODE = mode
         self.STATUS = 'IDLE'
@@ -89,9 +94,10 @@ class Strategy:
         }
 
         # send registration request to manager in this thread, since it is vital for everything
-        send_manager_query(self.MANAGER_ADDRESS,
+        message_to_address(self.MANAGER_ADDRESS,
                            self.MANAGER_PORT,
                            query,
+                           True,
                            self.register_callback)
 
     ##################################
@@ -118,7 +124,7 @@ class Strategy:
         """
         self.logger.info("Subscribing to %s:%s..." % (market_interface_id, symbol))
         query = {
-            'query': 'SUBSCRIBE',
+            'query': 'INTERFACE_SUBSCRIBE',
             'data': {
                 'strategy_id': self.STRATEGY_ID,
                 'market_interface_id': market_interface_id,
@@ -128,10 +134,11 @@ class Strategy:
         }
 
         # send subscription request to manager in separate thread
-        handler = threading.Thread(target=send_manager_query,
+        handler = threading.Thread(target=message_to_address,
                                    args=(self.MANAGER_ADDRESS,
                                          self.MANAGER_PORT,
                                          query,
+                                         True,
                                          lambda resp: self.subscribe_callback(resp, market_interface_id)))
         handler.start()
 
@@ -152,7 +159,7 @@ class Strategy:
 
         market_interface_id = self.subscriptions[subscription_handle]['market_interface_id']
         query = {
-            'query': 'UNSUBSCRIBE',
+            'query': 'INTERFACE_UNSUBSCRIBE',
             'data': {
                 'strategy_id': self.STRATEGY_ID,
                 'market_interface': market_interface_id,
@@ -161,10 +168,11 @@ class Strategy:
         }
 
         # send subscription request to manager in separate thread
-        handler = threading.Thread(target=send_manager_query,
+        handler = threading.Thread(target=message_to_address,
                                    args=(self.MANAGER_ADDRESS,
                                          self.MANAGER_PORT,
                                          query,
+                                         True,
                                          lambda resp: self.subscribe_callback(resp, subscription_handle)))
         handler.start()
 

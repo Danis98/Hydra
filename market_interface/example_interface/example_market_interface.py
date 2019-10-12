@@ -1,17 +1,16 @@
 import logging
 
+from common.logging import setup_logger
 from market_interface.market_interface_template import MarketInterface
 
-logging.basicConfig(filename='test_market_interface.log', filemode='w', level=logging.DEBUG)
-logging.getLogger().setLevel(logging.INFO)
-logging.getLogger().addHandler(logging.StreamHandler())
-logger = logging.getLogger("test_market_interface")
+setup_logger('example_market_interface.log')
 
 
 class TestMarketInterface (MarketInterface):
     def __init__(self):
         MarketInterface.__init__(self, market_interface_id="TEST_INTERFACE")
-        logger.info("TEST MARKET INTERFACE INITIALIZED")
+        self.logger = logging.getLogger('test_market_interface')
+        self.logger.info("TEST MARKET INTERFACE INITIALIZED")
 
     def make_rest_request(self):
         pass

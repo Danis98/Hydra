@@ -2,21 +2,8 @@ import sys
 import json
 import socket
 import logging
-import threading
 
-from market_interface.market_interface_api import MarketInterfaceServer
-
-
-logger = logging.getLogger('market_interface')
-
-
-# TODO: move to separate file, along with other client-side handlers
-class WebsocketHandler (threading.Thread):
-    def __init__(self):
-        threading.Thread.__init__(self)
-
-    def run(self):
-        pass
+from market_interface.market_interface_api import MarketInterfaceApiServer
 
 
 class MarketInterface:
@@ -34,6 +21,7 @@ class MarketInterface:
         :param market_interface_id: ID of the market interface
         :param config_file: file containing necessary init parameters
         """
+        self.logger = logging.getLogger('market_interface')
         self.INTERFACE_ID = market_interface_id
 
         # load initial config
@@ -52,7 +40,7 @@ class MarketInterface:
         try:
             manager_sock.connect((self.MANAGER_ADDRESS, self.MANAGER_PORT))
         except ConnectionRefusedError:
-            logger.error('Could not connect to manager')
+            self.logger.error('Could not connect to manager')
             sys.exit()
 
         # send registration request
@@ -70,16 +58,16 @@ class MarketInterface:
 
             # TODO: implement retry
             if resp['status'] == 'FAIL':
-                logger.error('Could not register interface: %s', resp['message'])
+                self.logger.error('Could not register interface: %s', resp['message'])
                 sys.exit()
             elif resp['status'] == 'SUCCESS':
-                logger.info('Interface registered')
+                self.logger.info('Interface registered')
         except socket.timeout:
-            logger.error('Connection timed out with manager during registration')
+            self.logger.error('Connection timed out with manager during registration')
             sys.exit()
 
         # start interface server
-        interface_server = MarketInterfaceServer(self.HOST, self.PORT, self)
+        interface_server = MarketInterfaceApiServer(self.HOST, self.PORT, self)
         interface_server.start()
 
         # start interface main cycle

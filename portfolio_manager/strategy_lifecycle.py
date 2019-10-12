@@ -1,5 +1,5 @@
-import socket
 import json
+import socket
 import logging
 
 
@@ -45,14 +45,6 @@ def init(address, port, resources):
 # TODO implement other lifecycle commands in manager
 
 def start():
-    pass
-
-
-def pause():
-    pass
-
-
-def resume():
     pass
 
 

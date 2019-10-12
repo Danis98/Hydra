@@ -2,13 +2,12 @@ import json
 import time
 import logging
 
-from portfolio_api import ServerThread
-from strategy_lifecycle import init, start, stop
+from common.logging import setup_logger
 
-logging.basicConfig(filename='portfolio_manager.log', filemode='w', level=logging.DEBUG)
-logging.getLogger().setLevel(logging.INFO)
-logging.getLogger().addHandler(logging.StreamHandler())
-logger = logging.getLogger('portfolio_manager')
+from portfolio_manager.portfolio_api import PortfolioApiServer
+from portfolio_manager.strategy_lifecycle import init, start, stop
+
+setup_logger('portfolio_manager.log')
 
 
 class PortfolioManager:
@@ -23,13 +22,15 @@ class PortfolioManager:
         Initialize manager and start manager server
         :param config_file: filename of the config file containing the necessary info
         """
-        logger.info('Starting portfolio manager...')
+        self.logger = logging.getLogger('portfolio_manager')
+        self.logger.info('Starting portfolio manager...')
 
         # read config file
         self.config = json.loads(open(config_file, "r").read())
 
-        logger.debug('Config loaded')
+        self.logger.debug('Config loaded')
 
+        self.HOST = self.config['host']
         self.PORT = self.config['port']
         self.REFRESH_TIMEOUT = self.config['refresh_timeout']
 
@@ -55,17 +56,16 @@ class PortfolioManager:
 
         # start manager server
         try:
-            logger.debug('Starting server...')
-            portfolio_server = ServerThread(self.PORT,
-                                            self.strategies,
-                                            self.market_interfaces)
+            self.logger.debug('Starting server...')
+            portfolio_server = PortfolioApiServer(self.HOST,
+                                                  self.PORT,
+                                                  self)
             portfolio_server.start()
         except Exception as e:
-            logger.error('Could not start server')
-            print(e)
+            self.logger.error('Could not start server: %s' % e)
             exit(1)
 
-        logger.info('Manager setup complete')
+        self.logger.info('Manager setup complete')
 
     def manager_main_cycle(self):
         """
@@ -106,5 +106,4 @@ class PortfolioManager:
 
 # start manager
 manager = PortfolioManager()
-logger.info("Starting manager main cycle...")
 manager.manager_main_cycle()

@@ -1,4 +1,5 @@
 {
+  "host": "localhost",
   "port": 35000,
   "refresh_timeout": 5
 }

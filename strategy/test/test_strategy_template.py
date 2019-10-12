@@ -19,7 +19,7 @@ def strat(mock_logger):
     return s
 
 
-@mock.patch('strategy.strategy_template.send_manager_query')
+@mock.patch('strategy.strategy_template.message_to_address')
 def test_register(mock_send, strat):
     strat.register()
     mock_send.assert_called_with(
@@ -34,11 +34,12 @@ def test_register(mock_send, strat):
                 'mode': strat.MODE,
             }
         },
+        True,
         strat.register_callback
     )
 
 
-@mock.patch('strategy.strategy_template.send_manager_query')
+@mock.patch('strategy.strategy_template.message_to_address')
 def test_subscribe_success(mock_send, strat):
     market_interface_id = 'TEST_INTERFACE'
     symbol = 'MONEY'
@@ -58,7 +59,7 @@ def test_subscribe_success(mock_send, strat):
     assert strat.subscriptions[sub_handle] == {'market_interface_id': market_interface_id}
 
 
-@mock.patch('strategy.strategy_template.send_manager_query')
+@mock.patch('strategy.strategy_template.message_to_address')
 def test_subscribe_fail(mock_send, strat):
     market_interface_id = 'TEST_INTERFACE'
     symbol = 'MONEY'
@@ -75,7 +76,7 @@ def test_subscribe_fail(mock_send, strat):
     assert len(strat.subscriptions) == 0
 
 
-@mock.patch('strategy.strategy_template.send_manager_query')
+@mock.patch('strategy.strategy_template.message_to_address')
 def test_unsubscribe_success(mock_send, strat):
     sub_handle = 'TEST_SUB_HANDLE'
     market_interface_id = 'TEST_INTERFACE'
@@ -93,7 +94,7 @@ def test_unsubscribe_success(mock_send, strat):
     assert len(strat.subscriptions) == 0
 
 
-@mock.patch('strategy.strategy_template.send_manager_query')
+@mock.patch('strategy.strategy_template.message_to_address')
 def test_unsubscribe_fail(mock_send, strat):
     sub_handle = 'TEST_SUB_HANDLE'
     market_interface_id = 'TEST_INTERFACE'
@@ -112,7 +113,7 @@ def test_unsubscribe_fail(mock_send, strat):
     assert len(strat.subscriptions) == 1
 
 
-@mock.patch('strategy.strategy_template.send_manager_query')
+@mock.patch('strategy.strategy_template.message_to_address')
 def test_unsubscribe_all(mock_send, strat):
     sub_len = 10
     market_interface_id = 'TEST_INTERFACE'

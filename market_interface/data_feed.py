@@ -1,7 +1,7 @@
-import socket
-import logging
 import json
 import time
+import socket
+import logging
 
 
 def push_feed(interface, subscription_handle):
