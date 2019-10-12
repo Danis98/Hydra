@@ -83,3 +83,13 @@ def test_handle_unknown(api_serv, src_sock):
     src_sock.recv.return_value.decode.return_value = json.dumps(msg)
     api_serv.handle_request(src_sock)
     api_serv.logger.error.assert_called_with('Unknown request: %s' % msg['query'])
+
+
+def test_ping(api_serv, src_sock):
+    msg = {
+        'query': 'PING',
+        'data': {}
+    }
+    src_sock.recv.return_value.decode.return_value = json.dumps(msg)
+    api_serv.handle_request(src_sock)
+    src_sock.send.assert_called_with(json.dumps({'status': 'SUCCESS', 'data': 'PONG'}))

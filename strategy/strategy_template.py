@@ -1,6 +1,4 @@
 import sys
-import json
-import socket
 import logging
 import threading
 
@@ -177,9 +175,27 @@ class Strategy:
             self.unsubscribe(sub)
 
     def get_bulk_data(self, market_interface_id, symbol, start_time, end_time, frequency):
+        """
+        Get data in bulk for a certain symbol during a certain time period.
+        The market interface will send it in one, big response.
+        Useful for getting historical data during setup.
+
+        :param market_interface_id:
+        :param symbol:
+        :param start_time:
+        :param end_time:
+        :param frequency:
+        :return:
+        """
         pass
 
     def get_current_data(self, market_interface_id, symbol):
+        """
+        Get current snapshot of the data from the market interface. One time response.
+
+        :param market_interface_id: ID of the concerned market interface
+        :param symbol: requested symbol
+        """
         pass
 
     ##################################

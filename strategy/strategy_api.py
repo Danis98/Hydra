@@ -4,6 +4,12 @@ import socket
 import json
 
 
+PONG_RESPONSE = {
+    'status': 'SUCCESS',
+    'data': 'PONG'
+}
+
+
 class StrategyApiServer (threading.Thread):
     """
     Main server thread for the strategy.
@@ -67,6 +73,10 @@ class StrategyApiServer (threading.Thread):
         elif msg['query'] == 'REALLOCATE':
             self.STRATEGY.on_funds_reallocation(msg['data'])
             # TODO reallocation done message
+        # special case: ping, just send a pong back
+        # TODO error handling on pong
+        elif msg['query'] == 'PING':
+            src_socket.send(json.dumps(PONG_RESPONSE))
         else:
             self.logger.error('Unknown request: %s' % msg['query'])
 
