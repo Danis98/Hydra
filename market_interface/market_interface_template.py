@@ -1,8 +1,8 @@
 import sys
 import json
-import socket
 import logging
 
+from common.messaging import message_to_address
 from market_interface.market_interface_api import MarketInterfaceApiServer
 
 
@@ -35,14 +35,29 @@ class MarketInterface:
         # active subscriptions, indexed by their unique handle
         self.subscriptions = {}
 
-        # connect to the manager
-        manager_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        try:
-            manager_sock.connect((self.MANAGER_ADDRESS, self.MANAGER_PORT))
-        except ConnectionRefusedError:
-            self.logger.error('Could not connect to manager')
-            sys.exit()
+        self.interface_server = None
 
+    def boot(self):
+        """
+        Start all the processes and do all the things needed to start rollin'
+        """
+        self.register()
+
+        # start interface server
+        interface_server = MarketInterfaceApiServer(self.HOST, self.PORT, self)
+        interface_server.start()
+
+        # start interface main cycle
+        self.interface_main_cycle()
+
+    def register_callback(self, resp):
+        if resp['status'] == 'SUCCESS':
+            self.logger.info('Interface registered')
+        else:
+            self.logger.error('Could not register interface: %s', resp['message'])
+            sys.exit(1)
+
+    def register(self):
         # send registration request
         query = {
             'query': 'REGISTER_MARKET_INTERFACE',
@@ -52,26 +67,13 @@ class MarketInterface:
                 'market_interface_port': self.PORT,
             }
         }
-        try:
-            manager_sock.send(json.dumps(query).encode())
-            resp = json.loads(manager_sock.recv(1024).decode())
 
-            # TODO: implement retry
-            if resp['status'] == 'FAIL':
-                self.logger.error('Could not register interface: %s', resp['message'])
-                sys.exit()
-            elif resp['status'] == 'SUCCESS':
-                self.logger.info('Interface registered')
-        except socket.timeout:
-            self.logger.error('Connection timed out with manager during registration')
-            sys.exit()
-
-        # start interface server
-        interface_server = MarketInterfaceApiServer(self.HOST, self.PORT, self)
-        interface_server.start()
-
-        # start interface main cycle
-        self.interface_main_cycle()
+        # send registration request to manager in this thread, since it is vital for everything
+        message_to_address(self.MANAGER_ADDRESS,
+                           self.MANAGER_PORT,
+                           query,
+                           True,
+                           self.register_callback)
 
     def interface_main_cycle(self):
         pass
@@ -86,4 +88,7 @@ class MarketInterface:
         pass
 
     def on_websocket_recv(self, msg):
+        pass
+
+    def get_data(self, sub_handle):
         pass

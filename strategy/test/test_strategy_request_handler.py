@@ -62,19 +62,6 @@ def test_handle_stop(req_handler, src_sock):
     req_handler.STRATEGY.on_stop.assert_called_with(msg['data'])
 
 
-def test_handle_resume(req_handler, src_sock):
-    msg = {
-        'query': 'RESUME',
-        'data': {
-            'message': 'TEST_RESUME'
-        }
-    }
-    src_sock.recv.return_value.decode.return_value = json.dumps(msg)
-    req_handler.start()
-    req_handler.join()
-    req_handler.STRATEGY.on_resume.assert_called_with(msg['data'])
-
-
 def test_handle_unknown(req_handler, src_sock):
     msg = {
         'query': 'UNKNOWN',
@@ -97,3 +84,16 @@ def test_ping(req_handler, src_sock):
     req_handler.start()
     req_handler.join()
     src_sock.send.assert_called_with(json.dumps(strat_handler.PONG_RESPONSE).encode())
+
+
+def test_handle_feed_recv(req_handler, src_sock):
+    msg = {
+        'query': 'MARKET_DATA_FEED',
+        'data': {
+            'message': 'TEST_FEED_RECV'
+        }
+    }
+    src_sock.recv.return_value.decode.return_value = json.dumps(msg)
+    req_handler.start()
+    req_handler.join()
+    req_handler.STRATEGY.on_data_feed_recv.assert_called_with(msg['data'])

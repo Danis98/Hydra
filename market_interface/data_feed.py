@@ -1,7 +1,15 @@
-import json
 import time
-import socket
 import logging
+
+from common.messaging import message_to_address
+
+
+def feed_callback(interface, sub_handle, resp, logger):
+    if resp['status'] == 'SUCCESS':
+        logger.debug("Pushed feed successfully")
+    elif resp['status'] == 'FAIL':
+        logger.error("Could not push feed: %s, cancelling subscription" % resp['message'])
+        del interface.subscriptions[sub_handle]
 
 
 def push_feed(interface, subscription_handle):
@@ -18,38 +26,19 @@ def push_feed(interface, subscription_handle):
     timeout = interface.subscriptions[subscription_handle]['frequency']
     logger.info("Data sender initialized for subscription %s" % subscription_handle)
 
-    # connect to the subscriber
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    try:
-        s.connect((strategy_address, strategy_port))
-    except ConnectionRefusedError:
-        logger.error('Could not connect to strategy')
-        return
-    logger.debug("Connected to the subscriber")
 
     # push feed data periodically
     while subscription_handle in interface.subscriptions:
         # prepare data to be sent
         query = {
             'query': 'MARKET_DATA_FEED',
-            'data': {
-                'message': 'TEST'
-            }
+            'data': interface.get_data(subscription_handle)
         }
 
-        # send it, if the connection is ended then cancel subscription
-        try:
-            s.send(json.dumps(query).encode())
-        except socket.timeout:
-            logger.error('Connection timed out with strategy during feed push')
-        except ConnectionResetError:
-            logger.error('Connection reset by subscriber')
-            del interface.subscriptions[subscription_handle]
-            break
-        except BrokenPipeError:
-            logger.error('Connection failed, terminating subscription...')
-            del interface.subscriptions[subscription_handle]
-            break
-        else:
-            logger.debug("Push successful")
+        message_to_address(strategy_address,
+                           strategy_port,
+                           query,
+                           False,
+                           lambda res: feed_callback(interface, subscription_handle, res, logger))
+
         time.sleep(timeout)

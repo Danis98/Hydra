@@ -39,6 +39,23 @@ def message_to_socket(dest_sock, dest_name, query, expect_response, callback):
         }
         callback(resp)
         return
+    except ConnectionResetError:
+        logger.error('Connection reset by %s during request' % dest_name)
+        resp = {
+            'status': 'FAIL',
+            'message': 'Connection reset by %s during request' % dest_name
+        }
+        callback(resp)
+        return
+    except BrokenPipeError:
+        logger.error('Connection failed with %s during request' % dest_name)
+        resp = {
+            'status': 'FAIL',
+            'message': 'Connection failed with %s during request' % dest_name
+        }
+        callback(resp)
+        return
+
     if expect_response:
         try:
             resp = json.loads(dest_sock.recv(BUFFER_SIZE).decode())

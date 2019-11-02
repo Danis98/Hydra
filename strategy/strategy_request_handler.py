@@ -20,5 +20,7 @@ class StrategyRequestHandler(RequestHandler):
             'START': self.STRATEGY.on_start,
             'STOP': self.STRATEGY.on_stop,
             'REALLOCATE': self.STRATEGY.on_funds_reallocation,
-            'PING': lambda data: PONG_RESPONSE
+            'PING': lambda data: PONG_RESPONSE,
+
+            'MARKET_DATA_FEED': self.STRATEGY.on_data_feed_recv
         }
