@@ -4,8 +4,11 @@ import matplotlib.pyplot as plt
 
 from common.logging import setup_logger
 from strategy.strategy_template import Strategy
+from common.plot_manager import PlotManager
 
 setup_logger('example_strategy.log')
+
+MAX_PLOT_POINTS = 200
 
 
 class ExampleStrategy (Strategy):
@@ -16,6 +19,11 @@ class ExampleStrategy (Strategy):
         self.logger = logging.getLogger('example_strategy')
 
         self.symbol_data = []
+
+        self.plot_manager = PlotManager(max_elements=MAX_PLOT_POINTS)
+
+        self.plot_manager.add_subplot('data_plot', 111)
+        self.plot_manager.set_subplot_title('data_plot', 'Incoming Data')
 
         self.logger.info('Example strategy initialized')
 
@@ -29,7 +37,8 @@ class ExampleStrategy (Strategy):
         self.logger.info('Initializing!')
         self.STATUS = 'INITIALIZING'
         self.funds = data['resources']
-        self.subscribe('TEST_INTERFACE', 'RANDOM', 3)
+
+        self.subscribe('TEST_INTERFACE', 'RANDOM', 1)
 
     def on_start(self, data):
         super().on_start(data)
@@ -42,28 +51,24 @@ class ExampleStrategy (Strategy):
 
     def on_data_feed_recv(self, data):
         self.symbol_data.append(data['value'])
-        self.logger.info(self.symbol_data)
 
     def strategy_cycle(self):
-        plt.ion()
-        fig = plt.figure()
-        ax = fig.add_subplot(111)
-        line, = ax.plot([], [], 'r-')
-
         last_status = None
+        last_plotted = 0
         while self.RUN:
             if last_status != self.STATUS:
                 self.logger.info("Test strategy is %s" % self.STATUS)
                 last_status = self.STATUS
 
-            if len(self.symbol_data) > 0:
-                line.set_xdata(range(len(self.symbol_data)))
-                line.set_ydata(self.symbol_data)
-                plt.draw()
-                plt.pause(0.02)
-            time.sleep(3)
-        plt.ioff()
-        plt.show()
+            if len(self.symbol_data) > last_plotted:
+                for i in range(last_plotted, len(self.symbol_data)):
+                    if i == 0:
+                        self.plot_manager.add_line('data_plot', 'price_line', [0], self.symbol_data[0:1])
+                    else:
+                        self.plot_manager.append_datapoint('data_plot', i+1, {
+                            'price_line': self.symbol_data[i]
+                        })
+                last_plotted = len(self.symbol_data)
 
 
 test_strategy = ExampleStrategy()
