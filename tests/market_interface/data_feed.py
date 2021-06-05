@@ -4,7 +4,7 @@ import mock
 from market_interface.data_feed import push_feed, feed_callback
 
 
-class MyTestCase(unittest.TestCase):
+class TestDataFeed(unittest.TestCase):
     @mock.patch("logging.getLogger")
     def setUp(self, mock_get_logger):
         self.logger = mock.Mock()
