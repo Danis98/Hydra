@@ -2,121 +2,113 @@ import json
 import socket
 import logging
 
-
-logger = logging.getLogger('common_request')
-
 BUFFER_SIZE = 1024
 
 
-def log_result(r):
-    if r['status'] == 'SUCCESS':
-        return 'Message sent/Request completed successfully!'
+def log_result(r, logger):
+    if 'status' not in r:
+        logger.error('Failure: Response object is malformed: status missing')
+    elif r['status'] == 'SUCCESS':
+        logger.debug('Message sent/Request completed successfully!')
     elif r['status'] == 'FAIL':
-        return 'Failure: %s' % r['message']
+        logger.error('Failure: %s' % (r['message'] if 'message' in r else '[NO ERROR MESSAGE]'))
     else:
-        return 'Failure: invalid status %s' % r['status']
+        logger.error('Failure: invalid status %s' % r['status'])
 
 
-def message_to_socket(dest_sock, dest_name, query, expect_response, callback):
-    """
-    Send request to socket, and execute the callback with the response.
-    Used when we already have the socket, esp. when we want to send a response
+class MessageSender:
+    def __init__(self, address, port, sock=None):
+        self.address, self.port = address, port
+        self.descriptor = '%s:%d' % (address, port)
+        self.connected = False
+        self.logger = logging.getLogger('message_sender_%s' % self.descriptor)
+        if sock is None:
+            self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        else:
+            self.socket = sock
 
-    :param dest_sock: socket connected to the dest
-    :param dest_name: string descriptor of the destination, used for debugging and logging
-    :param query: body of the request
-    :param expect_response: True if a response is expected from dest
-    :param callback:function to call after execution, necessary because we could be running
-                    in a separate thread
-    """
-    try:
-        dest_sock.send(json.dumps(query).encode())
-    except socket.timeout:
-        logger.error('Connection timed out with %s during request' % dest_name)
-        resp = {
-            'status': 'FAIL',
-            'message': 'Connection timed out with %s during request' % dest_name
-        }
-        callback(resp)
-        return
-    except ConnectionResetError:
-        logger.error('Connection reset by %s during request' % dest_name)
-        resp = {
-            'status': 'FAIL',
-            'message': 'Connection reset by %s during request' % dest_name
-        }
-        callback(resp)
-        return
-    except BrokenPipeError:
-        logger.error('Connection failed with %s during request' % dest_name)
-        resp = {
-            'status': 'FAIL',
-            'message': 'Connection failed with %s during request' % dest_name
-        }
-        callback(resp)
-        return
-
-    if expect_response:
+    def _connect_socket(self):
         try:
-            resp = json.loads(dest_sock.recv(BUFFER_SIZE).decode())
+            self.socket.connect((self.address, self.port))
+            self.connected = True
+            return {'status': 'SUCCESS'}
+        except ConnectionRefusedError:
+            self.logger.error('Could not connect to %s' % self.descriptor)
+            return {
+                'status': 'FAIL',
+                'message': 'Could not connect to %s' % self.descriptor
+            }
 
-            # call appropriate callback
-            if resp['status'] == 'FAIL':
-                callback(resp)
-            elif resp['status'] == 'SUCCESS':
-                callback(resp)
+    def _send_payload(self, payload):
+        try:
+            self.socket.send(json.dumps(payload).encode())
+            return {'status': 'SUCCESS'}
+        except socket.timeout:
+            self.logger.error('Connection timed out with %s during request' % self.descriptor)
+            return {
+                'status': 'FAIL',
+                'message': 'Connection timed out with %s during request' % self.descriptor
+            }
+        except ConnectionResetError:
+            self.logger.error('Connection reset by %s during request' % self.descriptor)
+            return {
+                'status': 'FAIL',
+                'message': 'Connection reset by %s' % self.descriptor
+            }
+        except BrokenPipeError:
+            self.logger.error('Connection failed with %s during request' % self.descriptor)
+            return {
+                'status': 'FAIL',
+                'message': 'Connection failed with %s during communication' % self.descriptor
+            }
+
+    def _get_response(self):
+        try:
+            resp = json.loads(self.socket.recv(BUFFER_SIZE).decode())
+            return {'status': 'SUCCESS',
+                    'data': resp}
         except socket.error as e:
-            logger.error('Could not get response from %s: %s' % (dest_name, e))
-            resp = {
+            self.logger.error('Could not get response from %s: %s' % (self.descriptor, e))
+            return {
                 'status': 'FAIL',
-                'message': 'Could not get response from %s: %s' % (dest_name, e)
+                'message': 'Could not get response from %s: %s' % (self.descriptor, e)
             }
-            callback(resp)
-            return
         except json.JSONDecodeError as e:
-            logger.error('Could not decode response from %s: %s' % (dest_name, e))
-            resp = {
+            self.logger.error('Could not decode response from %s: %s' % (self.descriptor, e))
+            return {
                 'status': 'FAIL',
-                'message': 'Could not decode response from %s: %s' % (dest_name, e)
+                'message': 'Could not decode response from %s: %s' % (self.descriptor, e)
             }
-            callback(resp)
+
+    def send_message(self, payload, expect_response, callback):
+        """
+        Send message, and execute the callback with the response.
+
+        :param payload: body of the request
+        :param expect_response: True if a response is expected from dest
+        :param callback: callback, called with response dict,
+                status can be FAIL (message contains error message) or SUCCESS (data contain requested data)
+        """
+
+        # connect to manager if not connected
+        if not self.connected:
+            conn_res = self._connect_socket()
+            if conn_res['status'] == 'FAIL':
+                callback(conn_res)
+                return
+
+        # send payload
+        send_res = self._send_payload(payload)
+        if send_res['status'] == 'FAIL':
+            callback(send_res)
             return
 
-    else:
-        resp = {
-            'status': 'SUCCESS',
-            'data': {}
-        }
-        callback(resp)
+        if expect_response:
+            recv_resp = self._get_response()
+            callback(recv_resp)
+        else:
+            callback({'status': 'SUCCESS'})
 
-
-def message_to_address(dest_address, dest_port, query, expect_response, callback):
-    """
-    Send request to the specified dest address and port,
-    and execute the callback with the response.
-    Used for one-off requests.
-
-    :param dest_address: address of the dest
-    :param dest_port: port of the server
-    :param query: body of the request
-    :param expect_response: True if a response is expected from dest
-    :param callback: function to call after execution, necessary because we could be running
-                    in a separate thread
-    """
-    dest_name = '%r:%r' % (dest_address, dest_port)
-
-    # connect to manager
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    try:
-        s.connect((dest_address, dest_port))
-    except ConnectionRefusedError:
-        logger.error('Could not connect to %s' % dest_name)
-        resp = {
-            'status': 'FAIL',
-            'message': 'Could not connect to %s' % dest_name
-        }
-        callback(resp)
-        return
-
-    # send request
-    message_to_socket(s, dest_name, query, expect_response, callback)
+    def close(self):
+        self.socket.close()
+        self.connected = False

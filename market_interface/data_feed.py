@@ -1,7 +1,7 @@
 import time
 import logging
 
-from common.messaging import message_to_address
+from common.messaging import MessageSender
 
 
 def feed_callback(interface, sub_handle, resp, logger):
@@ -26,6 +26,7 @@ def push_feed(interface, subscription_handle):
     timeout = interface.subscriptions[subscription_handle]['frequency']
     logger.info("Data sender initialized for subscription %s" % subscription_handle)
 
+    message_sender = MessageSender(strategy_address, strategy_port)
     # push feed data periodically
     while subscription_handle in interface.subscriptions:
         # prepare data to be sent
@@ -34,10 +35,13 @@ def push_feed(interface, subscription_handle):
             'data': interface.get_data(subscription_handle)
         }
 
-        message_to_address(strategy_address,
-                           strategy_port,
-                           query,
-                           False,
-                           lambda res: feed_callback(interface, subscription_handle, res, logger))
+        message_sender.send_message(query,
+                                    False,
+                                    lambda res: feed_callback(interface,
+                                                                   subscription_handle,
+                                                                   res,
+                                                                   logger))
 
         time.sleep(timeout)
+
+    message_sender.close()

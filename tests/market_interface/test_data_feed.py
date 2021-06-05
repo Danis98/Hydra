@@ -10,12 +10,13 @@ class TestDataFeed(unittest.TestCase):
         self.logger = mock.Mock()
         mock_get_logger.return_value = self.logger
 
-    @mock.patch("market_interface.data_feed.message_to_address")
+    @mock.patch("market_interface.data_feed.MessageSender")
     @mock.patch("time.sleep")
-    def test_push_feed(self, mock_sleep, mock_message_to_address):
+    def test_push_feed(self, mock_sleep, mock_message_sender):
         def side_effect(*args, **kwargs):
             del interface.subscriptions["test_sub"]
-        mock_message_to_address.side_effect = side_effect
+        mock_send_message = mock_message_sender.return_value.send_message
+        mock_send_message.side_effect = side_effect
 
         interface = mock.Mock()
         interface.subscriptions = {
@@ -29,8 +30,9 @@ class TestDataFeed(unittest.TestCase):
 
         push_feed(interface, "test_sub")
 
-        mock_message_to_address.assert_called_once()
-        self.assertTupleEqual((0, 0, {'query': 'MARKET_DATA_FEED', 'data': "test_data"}, False), mock_message_to_address.call_args[0][:-1])
+        mock_send_message.assert_called_once()
+        mock_message_sender.return_value.close.assert_called_once()
+        self.assertTupleEqual(({'query': 'MARKET_DATA_FEED', 'data': "test_data"}, False), mock_send_message.call_args[0][:-1])
 
     def test_feed_callback_success(self):
         interface = mock.Mock()
