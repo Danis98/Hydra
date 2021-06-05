@@ -26,7 +26,6 @@ def push_feed(interface, subscription_handle):
     timeout = interface.subscriptions[subscription_handle]['frequency']
     logger.info("Data sender initialized for subscription %s" % subscription_handle)
 
-
     # push feed data periodically
     while subscription_handle in interface.subscriptions:
         # prepare data to be sent
